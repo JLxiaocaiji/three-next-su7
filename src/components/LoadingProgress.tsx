@@ -23,11 +23,11 @@ export default function Preloader() {
 
   // 👉 动态计算 5 个 stop 的 offset
   const offsets = [
-    interpolate(value, 0, 100, 0, 0),
-    interpolate(value, 0, 100, 0.0029888955953756087, 0.2341),
-    interpolate(value, 0, 100, 0.009828499911662297, 0.5278),
-    interpolate(value, 0, 100, 0.012767601859784745, 0.7698),
-    interpolate(value, 0, 100, 0.012767601859784745, 1.0),
+    interpolate(value, progress, 100, 0, 0),
+    interpolate(value, progress, 100, 0.0029888955953756087, 0.2341),
+    interpolate(value, progress, 100, 0.009828499911662297, 0.5278),
+    interpolate(value, progress, 100, 0.012767601859784745, 0.7698),
+    interpolate(value, progress, 100, 0.012767601859784745, 1.0),
   ];
 
   return (
