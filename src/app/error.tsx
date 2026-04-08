@@ -1,4 +1,4 @@
-'use client'; // 必须加！
+'use client';
 
 export default function Error({
   error,

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  transpilePackages: ['three'],
+
   // 1. 输出模式（必选）
   output: 'standalone',
 
@@ -12,7 +15,6 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false, // 关 SourceMap（减体积）
 
   // 4. 代码分割 & 依赖打包
-  transpilePackages: ['你需要转译的包'], // 如 UI 库、monorepo 包
   serverExternalPackages: [], // 服务端不打包的大依赖（如 pdfkit）
 
   // 5. 实验性（Next 16+ 推荐）

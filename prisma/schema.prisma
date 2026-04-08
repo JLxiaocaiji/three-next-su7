@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["map", "public"]
+  // extensions = [postgis]
+}
+
+
+model nb_gcj02_points {
+  // 对应数据库 id bigint PK
+  id        BigInt      @id @default(autoincrement())
+  // 对应 gcj02_lng numeric(10,6)
+  gcj02_lng Decimal     @db.Decimal(10, 6)
+  // 对应 gcj02_lat numeric(10,6)
+  gcj02_lat Decimal     @db.Decimal(10, 6)
+  // 对应 area character varying(50)
+  area      String?     @db.VarChar(50)
+  // 对应 geom geometry (PostGIS空间类型)
+  geom      Bytes?      // @db.Geometry("Point", 4326) // 4326是WGS84坐标系，GCJ02可根据实际调整
+
+  // 表名映射到map架构下的nb_gcj02_points
+  @@schema("map")
+  // @@map("nb_gcj02_points")
+}
