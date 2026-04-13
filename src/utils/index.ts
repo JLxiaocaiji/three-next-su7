@@ -7,12 +7,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as dat from 'dat.gui';
 
-
 interface Sizes {
     width: number;
     height: number;
     pixelRatio: number;
-}
+} 
 
 export const useThree = () => {
     const sceneRef = useRef<THREE.Scene | null>(null);
@@ -85,10 +84,6 @@ export const useThree = () => {
         init()
     }, [])
 }
-
-
-
-
 
 // 定义进度回调类型
 type ProgressCallback = (percent: number) => void;
