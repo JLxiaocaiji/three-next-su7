@@ -1,9 +1,11 @@
-// app/lib/ModelLoader.ts
+// app/lib/ModelManager.ts
 'use client';
 
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+
+const hotReloadEvent = new EventTarget();
 
 // ==================== 类型 ====================
 export interface ModelFileInfo {
@@ -39,21 +41,9 @@ type BinHeader = {
   length: number;
 };
 
-interface WorkerRequest {
-  id: string;
-  buffer: ArrayBuffer;
-}
-
-interface WorkerResponse {
-  id: string;
-  success: boolean;
-  gltf?: GLTF;
-  error?: string;
-}
-
-export class ModelLoader {
-  private static instance: ModelLoader;
-  private gltfLoader: GLTFLoader | null = null;
+export class ModelManager {
+  private static instance: ModelManager | null = null;
+  public gltfLoader: GLTFLoader | null = null;
 
   private readonly modelDir = '/model/';
   private readonly maxRetries = 2;
@@ -91,9 +81,13 @@ export class ModelLoader {
     this.initLoader();
   }
 
-  static getInstance() {
-    if (!ModelLoader.instance) ModelLoader.instance = new ModelLoader();
-    return ModelLoader.instance;
+  public static getInstance() {
+    if (process.env.NODE_ENV === 'development') {
+      ModelManager.instance = null;
+    }
+
+    if (!ModelManager.instance) ModelManager.instance = new ModelManager();
+    return ModelManager.instance;
   }
 
   private initFiles() {
@@ -393,5 +387,42 @@ export class ModelLoader {
     // 剩余 padding 自动为 0（无需显式填充）
 
     return buffer;
+  }
+
+  public static getInstanceVersion(): number {
+    return (ModelManager as any)._version || 0;
+  }
+
+  static {
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+      // 兼容 Turbopack 和 Webpack
+      const anyWindow = window as any;
+
+      // 保存旧实例的清理函数
+      const cleanup = () => {
+        console.log('♻️ ModelManager 热更新：清理旧实例');
+        ModelManager.instance?.cancel();
+        ModelManager.instance = null;
+        (ModelManager as any)._version = ((ModelManager as any)._version || 0) + 1;
+      };
+
+      // Turbopack 方式
+      if (anyWindow.__next_turbo_hot__) {
+        anyWindow.__next_turbo_hot__.dispose(cleanup);
+      }
+      // Webpack 方式（兼容旧版本）
+      else if (typeof module !== 'undefined') {
+        const mod = module as any;
+        mod.hot?.accept();
+        mod.hot?.dispose(cleanup);
+      }
+
+      // 【关键】无论哪种方式，都触发自定义事件通知 React
+      const originalCleanup = cleanup;
+      (ModelManager as any)._hotCleanup = function () {
+        originalCleanup();
+        hotReloadEvent.dispatchEvent(new Event('hotreload'));
+      };
+    }
   }
 }

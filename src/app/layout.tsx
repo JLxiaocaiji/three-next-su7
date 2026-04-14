@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import LoadingProgressProvider from '@/app/LoadingProgress';
+import LoadingProgressProvider from '@/components/LoadingProgress';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

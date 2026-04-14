@@ -4,7 +4,7 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import * as THREE from 'three';
 import { ModelLoadResult } from '@/types/model';
 
-export default function Preloader({ children }: { children: React.ReactNode }) {
+export default function LoadingProgress({ children }: { children: React.ReactNode }) {
   const [value, setValue] = useState(100); // 输入 0-100
 
   type ContextType = {

@@ -2,7 +2,6 @@
 export interface ModelFileInfo {
   name: string; // 文件名
   path: string; // 前端可访问路径 /model/xxx
-  extension: string; // 后缀
   isRawGlb: boolean; // 是否 .raw.glb
   isBin: boolean; // 是否 .bin
 }
@@ -11,8 +10,9 @@ export interface ModelFileInfo {
 export interface ModelLoadResult {
   fileInfo: ModelFileInfo;
   success: boolean;
-  data?: any; // 你的模型数据
-  error?: Error;
+  data?: GLTF;
+  error?: string;
+  retryCount: number;
 }
 
 // 加载完成回调
