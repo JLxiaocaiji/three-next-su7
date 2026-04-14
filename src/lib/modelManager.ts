@@ -60,6 +60,9 @@ export class ModelManager {
     { name: 'sm_windspeed.bin', priority: 2 },
   ];
 
+  private totalBytes = 0;
+  private loadedBytes = 0;
+
   private readonly binConstants = {
     bin_type: 'gltf',
     pre_glb_header_check_digit: '1031088470',
@@ -111,35 +114,70 @@ export class ModelManager {
     this.gltfLoader = gltfLoader;
   }
 
+  private async getFileSize(url: string, signal: AbortSignal): Promise<number> {
+    try {
+      const res = await fetch(url, { method: 'HEAD', signal });
+      const len = res.headers.get('content-length');
+      return len ? Number(len) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
   // ==================== 加载 ====================
   async loadAll(onProgress?: ProgressCallback, onComplete?: LoadCallback) {
     if (this.isLoading) return;
     // 中止使用此管理器的加载器中正在进行的请求
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
     this.isLoading = true;
 
     const sorted = [...this.fileList].sort((a, b) => a.priority - b.priority);
     const total = sorted.length;
-    let done = 0;
-    const results: ModelLoadResult[] = [];
 
-    for (const f of sorted) {
-      if (this.abortController.signal.aborted) break;
+    await Promise.resolve();
 
-      const res = await this.loadWithRetry(f, () => {
-        done++;
-        onProgress?.({ current: done, total, percent: (done / total) * 100, currentFile: f.name });
-      });
+    try {
+      this.totalBytes = 0;
+      this.loadedBytes = 0;
 
-      results.push(res);
+      for (const f of sorted) {
+        const size = await this.getFileSize(f.path, signal);
+        (f as any).size = size;
+        this.totalBytes += size;
+      }
+
+      const results: ModelLoadResult[] = [];
+
+      for (const f of sorted) {
+        if (signal.aborted) break;
+
+        const res = await this.loadWithRetry(f, () => {
+          const size = (f as any).size || 0;
+          this.loadedBytes += size;
+
+          const percent =
+            this.totalBytes === 0 ? 0 : Math.floor((this.loadedBytes / this.totalBytes) * 100);
+          onProgress?.({
+            current: this.loadedBytes,
+            total: this.totalBytes,
+            percent: percent,
+            currentFile: f.name,
+          });
+        });
+
+        results.push(res);
+      }
+      this.isLoading = false;
+      onComplete?.(
+        results,
+        results.every((r) => r.success)
+      );
+      return results;
+    } catch (e) {
+      this.isLoading = false;
+      throw e;
     }
-
-    this.isLoading = false;
-    onComplete?.(
-      results,
-      results.every((r) => r.success)
-    );
-    return results;
   }
 
   // 重试
@@ -180,9 +218,6 @@ export class ModelManager {
 
     const arrayBuffer = await res.arrayBuffer();
 
-    console.log('load', f);
-    console.log('load', arrayBuffer);
-
     let glbBuffer: ArrayBuffer;
 
     // raw glb 直接加载
@@ -196,7 +231,7 @@ export class ModelManager {
         headerStr !== this.binConstants.pre_glb_header_check_digit &&
         headerStr !== this.binConstants.cur_glb_header_check_digit
       ) {
-        throw new Error(`Invalid header for .bin file: ${f.name}`);
+        throw new Error(`非法 .bin: ${f.name}`);
       }
 
       try {
@@ -391,38 +426,5 @@ export class ModelManager {
 
   public static getInstanceVersion(): number {
     return (ModelManager as any)._version || 0;
-  }
-
-  static {
-    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-      // 兼容 Turbopack 和 Webpack
-      const anyWindow = window as any;
-
-      // 保存旧实例的清理函数
-      const cleanup = () => {
-        console.log('♻️ ModelManager 热更新：清理旧实例');
-        ModelManager.instance?.cancel();
-        ModelManager.instance = null;
-        (ModelManager as any)._version = ((ModelManager as any)._version || 0) + 1;
-      };
-
-      // Turbopack 方式
-      if (anyWindow.__next_turbo_hot__) {
-        anyWindow.__next_turbo_hot__.dispose(cleanup);
-      }
-      // Webpack 方式（兼容旧版本）
-      else if (typeof module !== 'undefined') {
-        const mod = module as any;
-        mod.hot?.accept();
-        mod.hot?.dispose(cleanup);
-      }
-
-      // 【关键】无论哪种方式，都触发自定义事件通知 React
-      const originalCleanup = cleanup;
-      (ModelManager as any)._hotCleanup = function () {
-        originalCleanup();
-        hotReloadEvent.dispatchEvent(new Event('hotreload'));
-      };
-    }
   }
 }

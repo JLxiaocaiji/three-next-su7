@@ -1,4 +1,4 @@
-export default function Bottom() {
+export default function Bottom({ part }: { part: number }) {
   return (
     <>
       {/* bottom */}

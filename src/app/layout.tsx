@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import LoadingProgressProvider from '@/components/LoadingProgress';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -34,10 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <div id="root">
-          {/* 全局加载动画 */}
-          <LoadingProgressProvider>{children}</LoadingProgressProvider>
-        </div>
+        <div id="root">{children}</div>
       </body>
     </html>
   );

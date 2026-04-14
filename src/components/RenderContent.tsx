@@ -108,9 +108,7 @@ export default function ModelPage() {
   return (
     <>
       <aside className="webgl-wrapper">
-        <canvas className="webgl-canvas" data-engine="three.js r150">
-          No Canvas!
-        </canvas>
+        <canvas className="webgl-canvas"></canvas>
         <div id="css-container" ref={containerRef}></div>
       </aside>
     </>

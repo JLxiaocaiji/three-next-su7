@@ -1,4 +1,4 @@
-export default function LeftCustomization() {
+export default function LeftCustomization({ part }: { part: number }) {
   return (
     <>
       {/* 左侧调色面板 */}

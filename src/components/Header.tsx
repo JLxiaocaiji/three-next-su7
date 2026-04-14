@@ -1,3 +1,5 @@
+'use client';
+
 export default function Header() {
   return (
     <>
@@ -20,7 +22,7 @@ export default function Header() {
       {/* 右上角 */}
       <div className="Logo-container">
         <div className="Logo-content">
-          <p style={{ marginRight: '0.3rem', fontWeight: '300' }}>Author:</p>
+          <p style={{ marginRight: '0.3rem', fontWeight: '300' }}>Copy From:</p>
           <p style={{ color: 'rgb(255, 141, 26)', fontWeight: 600 }}>GameMCU</p>
           <p
             style={{
