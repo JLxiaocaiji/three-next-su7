@@ -1,5 +1,5 @@
 {
-  "name": "su-replication",
+  "name": "three-next-su7",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,8 +7,10 @@
     "dev": "next dev --turbopack",
     "build": "NODE_ENV=production next build",
     "start": "next start",
-    "lint": "eslint",
-    "lint:fix": "eslint --fix",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "analyze": "ANALYZE=true next build"
   },
   "dependencies": {
@@ -36,11 +38,18 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",
+    "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "prettier": "^3.8.2",
     "prisma": "^7.7.0",
     "raw-loader": "^4.0.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.0.8",
+    "vite-plugin-next": "^0.0.1-beta.1"
   }
 }
