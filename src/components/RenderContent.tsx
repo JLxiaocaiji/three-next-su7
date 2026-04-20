@@ -4,28 +4,30 @@ import { useEffect, useState, useRef } from 'react';
 import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
-import { ModelLoadResult } from '@/types/model';
-
-import { SceneManager } from '@/lib/sceneManager';
-import { ModelManager } from '@/lib/modelManager';
-
-export default function ModelPage() {
+import { SceneManager } from '@/lib/manager/sceneManager';
+export default function ModelPage({
+  setLoadingProgress,
+}: {
+  setLoadingProgress: (progress: number) => void;
+}) {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('准备加载');
   const [models, setModels] = useState<Map<string, GLTF>>(new Map());
 
   const containerRef = useRef<HTMLDivElement>(null);
-  //   const loaderRef = useRef(ModelManager.getInstance());
-  const loaderRef = useRef<ModelManager | null>(null);
   const sceneRef = useRef<SceneManager | null>(null);
+
+  const loadModel = async () => {
+    let percent = await sceneRef.current!.initLoad();
+    setLoadingProgress(percent);
+  };
 
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    loaderRef.current = ModelManager.getInstance();
-    const loader = loaderRef.current;
-
     sceneRef.current = SceneManager.getInstance(containerRef.current as HTMLDivElement);
+
+    loadModel();
 
     const { scene } = sceneRef.current;
 
@@ -54,40 +56,39 @@ export default function ModelPage() {
 
     sceneRef.current.startRender();
 
-    loader.loadAll(
-      // 进度回调：更新 UI
-      (p) => {
-        setProgress(p.percent);
-        setStatus(`正在加载: ${p.currentFile}`);
-      },
-      // 完成回调：处理结果
-      (results: ModelLoadResult[], allSuccess: boolean) => {
-        if (allSuccess) {
-          setStatus('加载完成');
+    // loader.loadAll(
+    //   // 进度回调：更新 UI
+    //   (p) => {
+    //     setProgress(p.percent);
+    //     setStatus(`正在加载: ${p.currentFile}`);
+    //   },
+    //   // 完成回调：处理结果
+    //   (results: ModelLoadResult[], allSuccess: boolean) => {
+    //     if (allSuccess) {
+    //       setStatus('加载完成');
 
-          // 保存模型到状态，并添加到场景
-          const newModels = new Map<string, GLTF>();
+    //       // 保存模型到状态，并添加到场景
+    //       const newModels = new Map<string, GLTF>();
 
-          results.forEach((res) => {
-            if (res.success && res.data) {
-              newModels.set(res.fileInfo.name, res.data);
-              // 将模型添加到 Three.js 场景
-              scene.add(res.data.scene);
-            }
-          });
-          setModels(newModels);
-        } else {
-          setStatus('加载失败');
-          console.error(
-            '失败详情:',
-            results.filter((r) => !r.success)
-          );
-        }
-      }
-    );
+    //       results.forEach((res) => {
+    //         if (res.success && res.data) {
+    //           newModels.set(res.fileInfo.name, res.data);
+    //           // 将模型添加到 Three.js 场景
+    //           scene.add(res.data.scene);
+    //         }
+    //       });
+    //       setModels(newModels);
+    //     } else {
+    //       setStatus('加载失败');
+    //       console.error(
+    //         '失败详情:',
+    //         results.filter((r) => !r.success)
+    //       );
+    //     }
+    //   }
+    // );
 
     return () => {
-      loader.cancel();
       if (!sceneRef.current) return;
       const { scene } = sceneRef.current;
       scene.traverse((obj) => {

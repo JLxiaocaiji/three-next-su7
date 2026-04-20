@@ -9,26 +9,24 @@ import RightContent from '@/components/RightContent';
 import RenderContext from '@/components/RenderContent';
 import LoadingProgress from '@/components/LoadingProgress';
 
-import { ModelManager } from '@/lib/modelManager';
+import { ModelManager } from '@/lib/manager/modelManager';
 export default function Page() {
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   const [part, setPart] = useState(0);
 
   useEffect(() => {
-    const manager = ModelManager.getInstance();
-
-    manager.loadAll(
-      (progress) => {
-        console.log('progress', progress.currentFile, progress.percent);
-        setLoadingProgress(progress.percent);
-      },
-      (results, allSuccess) => {
-        console.log('✅ 加载完成', allSuccess);
-      }
-    );
-
-    return () => manager.cancel();
+    // const manager = ModelManager.getInstance();
+    // manager.loadAll(
+    //   (progress) => {
+    //     console.log('progress', progress.currentFile, progress.percent);
+    //     setLoadingProgress(progress.percent);
+    //   },
+    //   (results, allSuccess) => {
+    //     console.log('✅ 加载完成', allSuccess);
+    //   }
+    // );
+    // return () => manager.cancel();
   }, []);
 
   return (
@@ -37,13 +35,13 @@ export default function Page() {
       <LoadingProgress loadingProgress={loadingProgress} />
 
       {/* 主体渲染 */}
-      <RenderContext />
+      <RenderContext setLoadingProgress={setLoadingProgress} />
 
       {/* header */}
       <Header />
       <LeftCustomization part={part} />
       <RightContent part={part} setPart={setPart} />
-      <Bottom />
+      <Bottom part={part} />
     </>
   );
 }

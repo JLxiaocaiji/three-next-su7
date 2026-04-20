@@ -12,4 +12,8 @@ interface NodeModule {
   };
 }
 
+declare global {
+  type ProgressCallback = (p: { loadedBytes: number; currentFile: string }) => void;
+}
+
 export {};

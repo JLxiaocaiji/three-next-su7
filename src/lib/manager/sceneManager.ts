@@ -2,13 +2,18 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// import * as dat from 'dat.gui';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 
 import { ModelManager } from './modelManager';
-
+import { MaterialManager } from './materialManager';
 import type * as DatGUIType from 'dat.gui';
 
+import { CacheKey } from '@/types/index';
+
+/**
+ * 场景管理:
+ * 渲染循环、相机、灯光
+ */
 export class SceneManager {
   private static instance: SceneManager | null = null;
 
@@ -22,13 +27,16 @@ export class SceneManager {
   private _guiInitialized = false;
 
   public readonly sizes: { width: number; height: number; pixelRatio: number };
-  public readonly gltfLoader: GLTFLoader;
+  public readonly modelManager: ModelManager;
+  public readonly materialManager: MaterialManager;
 
   private timer: THREE.Timer;
   // 动画帧 ID（用于清理）
   private _animationFrameId: number | null = null;
   // 窗口大小监听函数（用于清理）
   private _resizeHandler: (() => void) | null = null;
+
+  private currentModelCache: GLTF[] = [];
 
   private constructor(container: HTMLElement) {
     if (typeof window === 'undefined') {
@@ -40,15 +48,11 @@ export class SceneManager {
       pixelRatio: window.devicePixelRatio,
     };
 
-    // this.gui = new dat.GUI();
-    this._initGUI();
-
-    this.scene = new THREE.Scene();
-
     this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
 
     this.camera.position.set(0, 0, 5);
 
+    this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
     });
@@ -59,6 +63,8 @@ export class SceneManager {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
+    this.timer = new THREE.Timer();
+
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
@@ -66,9 +72,23 @@ export class SceneManager {
     const axesHelper = new THREE.AxesHelper(5);
     this.scene.add(axesHelper);
 
-    this.gltfLoader = ModelManager.getInstance().gltfLoader!;
+    this.modelManager = ModelManager.getInstance();
+    this.materialManager = MaterialManager.getInstance();
 
     this._initResizeHandler();
+
+    // this.gui = new dat.GUI();
+    this._initGUI();
+  }
+
+  public static getInstance(container?: HTMLElement): SceneManager {
+    if (!SceneManager.instance) {
+      if (!container) {
+        throw new Error('须传入 container 参数');
+      }
+      SceneManager.instance = new SceneManager(container);
+    }
+    return SceneManager.instance;
   }
 
   private async _initGUI(): Promise<void> {
@@ -85,14 +105,55 @@ export class SceneManager {
     }
   }
 
-  public static getInstance(container?: HTMLElement): SceneManager {
-    if (!SceneManager.instance) {
-      if (!container) {
-        throw new Error('须传入 container 参数');
+  async initLoad(): Promise<number> {
+    // let modelLoadedBytes: number = 0;
+    // let materialLoadedBytes: number = 0;
+
+    let modelTotalBytes = await this.modelManager.computeFileSize();
+    let materialTotalBytes = await this.materialManager.computeFileSize();
+
+    const total = modelTotalBytes + materialTotalBytes;
+    let modelLoaded = 0;
+    let materialLoaded = 0;
+    let percent = 0;
+    const updatePercent = () => {
+      const allLoaded = modelLoaded + materialLoaded;
+      percent = Math.floor((allLoaded / total) * 100);
+      return percent;
+    };
+
+    try {
+      const allModelSuccess = await this.modelManager.loadAllModel((progress) => {
+        console.log('progress', progress.currentFile, progress.loadedBytes);
+        modelLoaded = progress.loadedBytes;
+        updatePercent();
+      });
+      const allMaterialSuccess = await this.materialManager.loadAllMaterial((progress) => {
+        console.log('progress', progress.currentFile, progress.loadedBytes);
+        materialLoaded = progress.loadedBytes;
+        updatePercent();
+      });
+
+      if (!allModelSuccess || !allMaterialSuccess) {
+        console.error('模型加载失败');
+        return 0;
       }
-      SceneManager.instance = new SceneManager(container);
+
+      console.log('加载完成', allModelSuccess && allMaterialSuccess);
+
+      const modelCache = this.modelManager.getCahce('sm_car' as CacheKey);
+      if (modelCache) this.currentModelCache.push(modelCache);
+
+      // 加载完成后统一添加到场景
+      this.currentModelCache.forEach((model) => {
+        this.scene.add(model.scene);
+      });
+
+      return percent;
+    } catch (err) {
+      console.error('模型加载失败', err);
+      return percent;
     }
-    return SceneManager.instance;
   }
 
   public startRender(): void {
@@ -146,24 +207,5 @@ export class SceneManager {
     this.scene.clear();
     this.camera.clear();
     SceneManager.instance = null;
-  }
-
-  static {
-    if (
-      process.env.NODE_ENV === 'development' &&
-      typeof window !== 'undefined' &&
-      typeof module !== 'undefined'
-    ) {
-      // 使用类型断言告诉 TypeScript 这里有 hot 属性
-      const mod = module as NodeJS.Module & { hot?: any };
-
-      mod.hot?.dispose(() => {
-        if (SceneManager.instance) {
-          console.log('热更新：销毁旧的 SceneManager 实例');
-          SceneManager.instance.dispose();
-          SceneManager.instance = null;
-        }
-      });
-    }
   }
 }

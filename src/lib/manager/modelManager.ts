@@ -5,11 +5,12 @@ import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-const hotReloadEvent = new EventTarget();
+import { CacheKey } from '@/types/index';
+import { getFileSize } from '@/utils';
 
 // ==================== 类型 ====================
 export interface ModelFileInfo {
-  name: string;
+  name: CacheKey;
   path: string;
   priority: number;
   isRawGlb: boolean;
@@ -24,16 +25,7 @@ export interface ModelLoadResult {
   retryCount: number;
 }
 
-type ProgressCallback = (p: {
-  current: number;
-  total: number;
-  percent: number;
-  currentFile: string;
-}) => void;
-
-type LoadCallback = (results: ModelLoadResult[], allSuccess: boolean) => void;
-
-type Model = { name: string; priority: number };
+type Model = { name: CacheKey; priority: number; suffix: '.bin' | '.glb' };
 
 type BinHeader = {
   magic: string;
@@ -41,6 +33,10 @@ type BinHeader = {
   length: number;
 };
 
+/**
+ * 模型管理器
+ * 加载、销毁、组织模型
+ */
 export class ModelManager {
   private static instance: ModelManager | null = null;
   public gltfLoader: GLTFLoader | null = null;
@@ -48,20 +44,18 @@ export class ModelManager {
   private readonly modelDir = '/model/';
   private readonly maxRetries = 2;
   private readonly fileConfigs: Model[] = [
-    { name: 'sm_car.bin', priority: 1 },
-    { name: 'sm_car_lightbar.bin', priority: 1 },
-    { name: 'sm_carradar.bin', priority: 2 },
-    { name: 'sm_curvature.bin', priority: 2 },
-    { name: 'sm_linecar.bin', priority: 2 },
-    { name: 'sm_simplecar.bin', priority: 2 },
-    { name: 'sm_size.bin', priority: 2 },
-    { name: 'sm_speedup.bin', priority: 2 },
-    { name: 'sm_startroom.raw.glb', priority: 2 },
-    { name: 'sm_windspeed.bin', priority: 2 },
+    { name: CacheKey.sm_car, priority: 1, suffix: '.bin' },
+    { name: CacheKey.sm_car_lightbar, priority: 1, suffix: '.bin' },
+    { name: CacheKey.sm_carradar, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_curvature, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_linecar, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_simplecar, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_size, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_speedup, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_startroomraw, priority: 2, suffix: '.glb' },
+    { name: CacheKey.sm_windspeed, priority: 2, suffix: '.bin' },
   ];
-
-  private totalBytes = 0;
-  private loadedBytes = 0;
+  private loadedBytes: number = 0;
 
   private readonly binConstants = {
     bin_type: 'gltf',
@@ -73,14 +67,20 @@ export class ModelManager {
   };
 
   private fileList: ModelFileInfo[] = [];
-  private cache = new Map<string, GLTF>();
+  public cache = new Map<CacheKey, GLTF>();
   private abortController: AbortController | null = null;
   private isLoading = false;
   private taskMap = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 
   private constructor() {
-    this.initFiles();
-
+    this.fileList = this.fileConfigs
+      .map((c) => ({
+        ...c,
+        path: this.modelDir + c.name + c.suffix,
+        isRawGlb: c.suffix === '.glb',
+        isBin: c.suffix === '.bin',
+      }))
+      .sort((a, b) => a.priority - b.priority);
     this.initLoader();
   }
 
@@ -93,13 +93,16 @@ export class ModelManager {
     return ModelManager.instance;
   }
 
-  private initFiles() {
-    this.fileList = this.fileConfigs.map((c) => ({
-      ...c,
-      path: this.modelDir + c.name,
-      isRawGlb: c.name.endsWith('.raw.glb'),
-      isBin: c.name.endsWith('.bin'),
-    }));
+  public async computeFileSize() {
+    let totalBytes = 0;
+
+    for (const f of this.fileList) {
+      const size = await getFileSize(f.path);
+      (f as any).size = size;
+      totalBytes += size;
+    }
+
+    return totalBytes;
   }
 
   private initLoader() {
@@ -114,66 +117,47 @@ export class ModelManager {
     this.gltfLoader = gltfLoader;
   }
 
-  private async getFileSize(url: string, signal: AbortSignal): Promise<number> {
-    try {
-      const res = await fetch(url, { method: 'HEAD', signal });
-      const len = res.headers.get('content-length');
-      return len ? Number(len) : 0;
-    } catch {
-      return 0;
-    }
-  }
+  // private async getFileSize(url: string): Promise<number> {
+  //   try {
+  //     const res = await fetch(url, { method: 'HEAD' });
+  //     const len = res.headers.get('content-length');
+  //     return len ? Number(len) : 0;
+  //   } catch {
+  //     return 0;
+  //   }
+  // }
 
-  // ==================== 加载 ====================
-  async loadAll(onProgress?: ProgressCallback, onComplete?: LoadCallback) {
+  // 加载
+  async loadAllModel(onProgress?: ProgressCallback) {
     if (this.isLoading) return;
     // 中止使用此管理器的加载器中正在进行的请求
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     this.isLoading = true;
 
-    const sorted = [...this.fileList].sort((a, b) => a.priority - b.priority);
-    const total = sorted.length;
-
-    await Promise.resolve();
+    // await Promise.resolve();
 
     try {
-      this.totalBytes = 0;
-      this.loadedBytes = 0;
-
-      for (const f of sorted) {
-        const size = await this.getFileSize(f.path, signal);
-        (f as any).size = size;
-        this.totalBytes += size;
-      }
-
       const results: ModelLoadResult[] = [];
 
-      for (const f of sorted) {
+      for (const f of this.fileList) {
         if (signal.aborted) break;
 
         const res = await this.loadWithRetry(f, () => {
           const size = (f as any).size || 0;
           this.loadedBytes += size;
 
-          const percent =
-            this.totalBytes === 0 ? 0 : Math.floor((this.loadedBytes / this.totalBytes) * 100);
           onProgress?.({
-            current: this.loadedBytes,
-            total: this.totalBytes,
-            percent: percent,
+            loadedBytes: this.loadedBytes,
             currentFile: f.name,
           });
         });
-
         results.push(res);
       }
       this.isLoading = false;
-      onComplete?.(
-        results,
-        results.every((r) => r.success)
-      );
-      return results;
+
+      console.log(this.cache);
+      return results.every((r) => r.success);
     } catch (e) {
       this.isLoading = false;
       throw e;
@@ -201,10 +185,11 @@ export class ModelManager {
     return { fileInfo: f, success: false, error: 'max retry', retryCount: attempt };
   }
 
-  // 真正加载
+  // 单个加载
   private async loadSingle(f: ModelFileInfo): Promise<GLTF> {
+    console.log(f);
     // 检查缓存
-    if (this.cache.has(f.path)) return this.cache.get(f.path)!;
+    if (this.cache.has(f.name)) return this.cache.get(f.name)!;
 
     if (!this.gltfLoader) {
       this.initLoader();
@@ -245,6 +230,8 @@ export class ModelManager {
 
         const { content, body } = this.parseToContentAndBody(header, arrayBuffer);
 
+        if (!content || !body) throw new Error('解析 .bin 失败');
+
         glbBuffer = this.buildGLBFromParts(header, content, body);
       } catch (e) {
         throw new Error(`解析 .bin ${f.name} 失败`);
@@ -255,8 +242,16 @@ export class ModelManager {
 
     const gltf = await this.parseGLBBuffer(glbBuffer);
 
-    this.cache.set(f.path, gltf);
+    this.cache.set(f.name, gltf);
     return gltf;
+  }
+
+  public getCahce(cacheName: CacheKey) {
+    if (this.cache.has(cacheName)) return this.cache.get(cacheName)!;
+  }
+
+  public getAllCache() {
+    return this.cache;
   }
 
   cancel() {
@@ -309,7 +304,7 @@ export class ModelManager {
   private parseToContentAndBody(
     header: BinHeader,
     buffer: ArrayBuffer
-  ): { content: string; body: ArrayBuffer } {
+  ): { content: string; body: ArrayBuffer | null } {
     let content = null; // 存放解析出来的 glTF JSON 字符串
     let body = null; // 存放模型二进制数据（顶点、纹理等）
 
@@ -370,7 +365,7 @@ export class ModelManager {
       return { content, body };
     } catch (e) {
       console.log(e);
-      return { content: null, body: null };
+      return { content: '', body: null };
     }
   }
 

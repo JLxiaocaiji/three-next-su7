@@ -11,22 +11,23 @@ export const useTap = <T = void>(onTap: (data: T) => void) => {
   );
 };
 
-export const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(false);
+export const useIsSwapWidthAndHeight = () => {
+  const [isSwap, setIsSwap] = useState(false);
 
   const checkIsMobile = () => {
     const ua = navigator.userAgent;
     if (/iPad/.test(ua)) return false;
+    if (window.innerWidth < 645) return false;
     return /Mobile|Android|iPhone|iPod|BlackBerry|Windows Phone/gi.test(ua);
   };
 
   useEffect(() => {
     // 初始化
-    setIsMobile(checkIsMobile());
+    setIsSwap(checkIsMobile());
 
     // 监听变化
     const onUpdate = () => {
-      setIsMobile(checkIsMobile());
+      setIsSwap(checkIsMobile());
     };
 
     window.addEventListener('resize', onUpdate);
@@ -38,5 +39,5 @@ export const useIsMobile = () => {
     };
   }, []);
 
-  return isMobile;
+  return isSwap;
 };
