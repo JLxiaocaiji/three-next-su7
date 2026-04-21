@@ -5,6 +5,8 @@ import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
 import { SceneManager } from '@/lib/manager/sceneManager';
+
+import { useIsSwapWidthAndHeight } from '@/hook/index';
 export default function ModelPage({
   setLoadingProgress,
 }: {
@@ -14,8 +16,10 @@ export default function ModelPage({
   const [status, setStatus] = useState('准备加载');
   const [models, setModels] = useState<Map<string, GLTF>>(new Map());
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
+
+  const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
 
   const loadModel = async () => {
     let percent = await sceneRef.current!.initLoad();
@@ -25,11 +29,11 @@ export default function ModelPage({
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    sceneRef.current = SceneManager.getInstance(containerRef.current as HTMLDivElement);
+    sceneRef.current = SceneManager.getInstance(containerRef.current as HTMLCanvasElement);
+
+    const { scene, renderer, camera, composer } = sceneRef.current;
 
     loadModel();
-
-    const { scene } = sceneRef.current;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     scene.add(ambientLight);
@@ -49,44 +53,7 @@ export default function ModelPage({
     directionalLight.shadow.camera.bottom = -5;
     scene.add(directionalLight);
 
-    // 辅助背光暖色填充阴影
-    // const backLight = new THREE.PointLight(0xcc9966, 0.5);
-    // backLight.position.set(-2, 1, -3);
-    // scene.add(backLight);
-
     sceneRef.current.startRender();
-
-    // loader.loadAll(
-    //   // 进度回调：更新 UI
-    //   (p) => {
-    //     setProgress(p.percent);
-    //     setStatus(`正在加载: ${p.currentFile}`);
-    //   },
-    //   // 完成回调：处理结果
-    //   (results: ModelLoadResult[], allSuccess: boolean) => {
-    //     if (allSuccess) {
-    //       setStatus('加载完成');
-
-    //       // 保存模型到状态，并添加到场景
-    //       const newModels = new Map<string, GLTF>();
-
-    //       results.forEach((res) => {
-    //         if (res.success && res.data) {
-    //           newModels.set(res.fileInfo.name, res.data);
-    //           // 将模型添加到 Three.js 场景
-    //           scene.add(res.data.scene);
-    //         }
-    //       });
-    //       setModels(newModels);
-    //     } else {
-    //       setStatus('加载失败');
-    //       console.error(
-    //         '失败详情:',
-    //         results.filter((r) => !r.success)
-    //       );
-    //     }
-    //   }
-    // );
 
     return () => {
       if (!sceneRef.current) return;
@@ -106,11 +73,47 @@ export default function ModelPage({
     };
   }, []);
 
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, renderer, camera, composer, sizes } = sceneRef.current;
+
+    sizes.width = viewWidth;
+    sizes.height = viewHeight;
+    sizes.pixelRatio = Math.min(window.devicePixelRatio, 2);
+
+    // sceneRef.current.resize();
+
+    console.log('resize', sizes);
+    sizes.width = viewWidth;
+    sizes.height = viewHeight;
+    camera.aspect = viewWidth / viewHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(viewWidth, viewHeight);
+    composer?.setSize(viewWidth, viewHeight);
+
+    if (isSwap) {
+      sceneRef.current.camera.position.set(0, 0, 7);
+    } else {
+      sceneRef.current.camera.position.set(0, 0, 5);
+    }
+  }, [isSwap, viewWidth, viewHeight]);
+
   return (
     <>
       <aside className="webgl-wrapper">
-        <canvas className="webgl-canvas"></canvas>
-        <div id="css-container" ref={containerRef}></div>
+        <canvas
+          className="webgl-canvas"
+          ref={containerRef}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: `${viewHeight}px`,
+            height: `${viewWidth}px`,
+            touchAction: 'none',
+          }}
+        ></canvas>
+        <div id="css-container"></div>
       </aside>
     </>
   );

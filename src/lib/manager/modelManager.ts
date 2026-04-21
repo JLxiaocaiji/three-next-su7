@@ -117,16 +117,6 @@ export class ModelManager {
     this.gltfLoader = gltfLoader;
   }
 
-  // private async getFileSize(url: string): Promise<number> {
-  //   try {
-  //     const res = await fetch(url, { method: 'HEAD' });
-  //     const len = res.headers.get('content-length');
-  //     return len ? Number(len) : 0;
-  //   } catch {
-  //     return 0;
-  //   }
-  // }
-
   // 加载
   async loadAllModel(onProgress?: ProgressCallback) {
     if (this.isLoading) return;
@@ -187,7 +177,6 @@ export class ModelManager {
 
   // 单个加载
   private async loadSingle(f: ModelFileInfo): Promise<GLTF> {
-    console.log(f);
     // 检查缓存
     if (this.cache.has(f.name)) return this.cache.get(f.name)!;
 
@@ -246,7 +235,7 @@ export class ModelManager {
     return gltf;
   }
 
-  public getCahce(cacheName: CacheKey) {
+  public getCache(cacheName: CacheKey) {
     if (this.cache.has(cacheName)) return this.cache.get(cacheName)!;
   }
 

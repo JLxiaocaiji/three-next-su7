@@ -13,31 +13,40 @@ export const useTap = <T = void>(onTap: (data: T) => void) => {
 
 export const useIsSwapWidthAndHeight = () => {
   const [isSwap, setIsSwap] = useState(false);
+  const [viewWidth, setViewWidth] = useState(0);
+  const [viewHeight, setViewHeight] = useState(0);
 
-  const checkIsMobile = () => {
+  const checkIsNeedSwap = () => {
+    if (typeof window === 'undefined') return false;
     const ua = navigator.userAgent;
-    if (/iPad/.test(ua)) return false;
-    if (window.innerWidth < 645) return false;
-    return /Mobile|Android|iPhone|iPod|BlackBerry|Windows Phone/gi.test(ua);
+    const isMobile = /Mobile|Android|iPhone|iPod|iPad|Android(?!.*Mobile)/i.test(ua);
+    return isMobile || window.innerWidth < 645;
+  };
+
+  const update = () => {
+    const swap = checkIsNeedSwap();
+    setIsSwap(swap);
+
+    let w = window.innerWidth;
+    let h = window.innerHeight;
+    console.log('update', swap, w, h);
+    if (swap) {
+      [w, h] = [h, w];
+    }
+
+    setViewWidth(w);
+    setViewHeight(h);
   };
 
   useEffect(() => {
-    // 初始化
-    setIsSwap(checkIsMobile());
-
-    // 监听变化
-    const onUpdate = () => {
-      setIsSwap(checkIsMobile());
-    };
-
-    window.addEventListener('resize', onUpdate);
-    window.addEventListener('orientationchange', onUpdate);
-
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
     return () => {
-      window.removeEventListener('resize', onUpdate);
-      window.removeEventListener('orientationchange', onUpdate);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
     };
   }, []);
 
-  return isSwap;
+  return { isSwap, viewWidth, viewHeight };
 };
