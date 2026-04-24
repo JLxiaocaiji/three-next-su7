@@ -18,9 +18,24 @@ import type * as DatGUIType from 'dat.gui';
 
 import { CacheKey } from '@/types/index';
 
+import { SCENE_CONFIG } from './constantsConfig';
+
 export enum EnvMaps {
   t_env_night = 't_env_night',
   t_env_light = 't_env_light',
+}
+
+export interface ModelMeshData {
+  meshes: THREE.Mesh[];
+  materials: Record<string, THREE.MeshStandardMaterial | THREE.ShaderMaterial>;
+  textures: Record<string, THREE.Texture>;
+}
+
+export interface ModelGroup extends THREE.Group {
+  userData: {
+    animations?: THREE.AnimationClip[];
+    meshData?: ModelMeshData;
+  };
 }
 
 /**
@@ -43,14 +58,12 @@ export class SceneManager {
   public cubeCamera: THREE.CubeCamera | null = null;
   public cubeRenderTarget: THREE.WebGLCubeRenderTarget | null = null;
 
+  public orthographicCamera!: THREE.OrthographicCamera;
+
   // envMap
   private envMaps: Record<EnvMaps, THREE.Texture | null> = {
     t_env_night: null,
     t_env_light: null,
-  };
-
-  private layers: Record<string, number> = {
-    capture_layer: 31,
   };
 
   // 后期处理
@@ -62,13 +75,16 @@ export class SceneManager {
   public gui: DatGUIType.GUI | null = null;
   private _guiInitialized = false;
 
-  private timer: THREE.Timer;
+  // timer
+  public timer: THREE.Timer;
+  public globalUniforms: Record<string, THREE.IUniform> = { u_time: { value: 0 } };
+
   // 动画帧 ID（用于清理）
   private _animationFrameId: number | null = null;
   // 窗口大小监听函数（用于清理）
   private _resizeHandler: (() => void) | null = null;
   // 当前模型缓存
-  private currentModelCache: GLTF[] = [];
+  private currentModelCache: THREE.Group[] = [];
 
   private constructor(canvas: HTMLCanvasElement) {
     if (typeof window === 'undefined') {
@@ -83,6 +99,7 @@ export class SceneManager {
     this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
     this.camera.position.set(0, 0, 5);
 
+    // 初始化立方相机和渲染目标（用于后续实时捕获清晰反射）
     this.cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
       format: THREE.RGBAFormat,
       type: THREE.UnsignedByteType,
@@ -91,6 +108,15 @@ export class SceneManager {
     });
 
     this.cubeCamera = new THREE.CubeCamera(0.1, 1000, this.cubeRenderTarget);
+
+    this.orthographicCamera = new THREE.OrthographicCamera(
+      -this.sizes.width / 2,
+      this.sizes.width / 2,
+      this.sizes.height / 2,
+      -this.sizes.height / 2,
+      0.1,
+      1000
+    );
 
     this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({
@@ -101,7 +127,6 @@ export class SceneManager {
     this.renderer.setClearColor(new THREE.Color('#ffffff'));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // container.appendChild(this.renderer.domElement);
 
     this.timer = new THREE.Timer();
 
@@ -178,11 +203,13 @@ export class SceneManager {
 
       console.log('加载完成', allModelSuccess && allMaterialSuccess);
 
+      this.initMaterials();
+
+      this.init();
+
       /*
-       初始化加载 car 和 t_env_night.hdr、t_env_light.hdr
+       初始化加载 t_env_night.hdr、t_env_light.hdr
        */
-      const modelCache = this.modelManager.getCache('sm_car' as CacheKey);
-      if (modelCache) this.currentModelCache.push(modelCache);
       const t_env_night = this.materialManager.getCache('t_env_night') ?? null;
       const t_env_light = this.materialManager.getCache('t_env_light') ?? null;
       this.envMaps = {
@@ -193,9 +220,6 @@ export class SceneManager {
       await this.materialManager.initEnvironment('t_env_night');
 
       // 加载完成后统一添加到场景
-      this.currentModelCache.forEach((model) => {
-        this.scene.add(model.scene);
-      });
 
       return percent;
     } catch (err) {
@@ -206,6 +230,100 @@ export class SceneManager {
     }
   }
 
+  // 处理各种材质
+  public initMaterials(): void {
+    // sm_car
+    const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    // if (carModelCache) this.currentModelCache.push(carModelCache);
+    this.scene.add(carModelCache);
+    const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
+    carMeshData && this.materialManager.initCarMaterial(carMeshData);
+
+    // lightbar
+    const lightbarModelCache = this.modelManager.getCache(
+      'sm_car_lightbar' as CacheKey
+    ) as ModelGroup;
+    const lightbarMeshData = lightbarModelCache?.userData?.meshData as ModelMeshData;
+    lightbarModelCache.visible = false;
+    lightbarMeshData && this.materialManager.initLightbarMaterial(lightbarMeshData);
+
+    // sm_startroom
+    const sm_startroomModelCache = this.modelManager.getCache(
+      'sm_startroom.raw' as CacheKey
+    ) as ModelGroup;
+    const startroomMeshData = sm_startroomModelCache?.userData?.meshData as ModelMeshData;
+    startroomMeshData && this.materialManager.initStartroomMaterial(startroomMeshData);
+
+    // sm_speedup
+    const sm_speedupModelCache = this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup;
+    const sm_speedupMeshData = sm_speedupModelCache?.userData?.meshData as ModelMeshData;
+    sm_speedupMeshData && this.materialManager.initSpeedupMaterial(sm_speedupMeshData);
+
+    // sm_size
+    const sm_sizeModelCache = this.modelManager.getCache('sm_size' as CacheKey) as ModelGroup;
+    const sm_sizeMeshData = sm_sizeModelCache?.userData?.meshData as ModelMeshData;
+    Object.values(sm_sizeMeshData.materials).forEach(
+      (item: THREE.MeshStandardMaterial | THREE.ShaderMaterial) => {
+        if (item instanceof THREE.MeshStandardMaterial) {
+          item.transparent = true;
+          item.needsUpdate = true;
+          if (item.map) {
+            // 加空判断更安全
+            item.map.anisotropy = 4;
+          }
+        }
+      }
+    );
+
+    // sm_curvature
+    const sm_curvatureModelCache = this.modelManager.getCache(
+      'sm_curvature' as CacheKey
+    ) as ModelGroup;
+    const sm_curvatureMeshData = sm_curvatureModelCache?.userData?.meshData as ModelMeshData;
+    // sm_curvature -> 曲率
+    const sm_curvatureMesh = sm_curvatureMeshData.meshes.find((item) => item.name === '曲率');
+    // sm_curvatureMeshData.materials > m_curvature
+    sm_curvatureMesh &&
+      (sm_curvatureMeshData.materials.m_curvature =
+        this.materialManager.initCurvatureMaterial(sm_curvatureMesh));
+    sm_curvatureMesh!.layers.enable(SCENE_CONFIG.LAYER_CAPTURE);
+    Object.values(sm_curvatureMeshData.materials).forEach((item) => {
+      item.transparent = true;
+      item.needsUpdate = true;
+    });
+
+    // sm_windspeed
+    const sm_windspeedModelCache = this.modelManager.getCache(
+      'sm_windspeed' as CacheKey
+    ) as ModelGroup;
+    const sm_windspeedMeshData = sm_windspeedModelCache?.userData?.meshData as ModelMeshData;
+    sm_windspeedMeshData && this.materialManager.initWindspeedMaterial(sm_windspeedMeshData);
+
+    // sm_linecar 汽车线框
+    const sm_linecarModelCache = this.modelManager.getCache('sm_linecar' as CacheKey) as ModelGroup;
+    const sm_linecarMeshData = sm_linecarModelCache?.userData?.meshData as ModelMeshData;
+    sm_linecarMeshData && this.materialManager.initLinecarMaterial(sm_linecarMeshData);
+
+    // sm_carradar
+    const sm_carradarModelCache = this.modelManager.getCache(
+      'sm_carradar' as CacheKey
+    ) as ModelGroup;
+    const sm_carradarMeshData = sm_carradarModelCache?.userData?.meshData as ModelMeshData;
+    sm_carradarMeshData && this.materialManager.initCarradarMaterial(sm_carradarMeshData);
+
+    // sm_simpleCar
+    const sm_simpleCarModelCache = this.modelManager.getCache(
+      'sm_simplecar' as CacheKey
+    ) as ModelGroup;
+    const sm_simpleCarMeshData = sm_simpleCarModelCache?.userData?.meshData as ModelMeshData;
+    sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
+  }
+
+  public init(): void {
+    this.scene.background = new THREE.Color(0, 0, 0);
+  }
+
+  // 后期处理
   private initPostProcessing(): void {
     // 后期处理
     this.composer = new EffectComposer(this.renderer);
@@ -232,6 +350,10 @@ export class SceneManager {
 
     const render = () => {
       this._animationFrameId = requestAnimationFrame(render);
+
+      this.timer.update();
+      this.globalUniforms.u_time.value = this.timer.getElapsed();
+
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
 

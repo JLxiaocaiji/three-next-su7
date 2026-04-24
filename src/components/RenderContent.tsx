@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { SceneManager } from '@/lib/manager/sceneManager';
 
 import { useIsSwapWidthAndHeight } from '@/hook/index';
+import { debounce } from '@/utils/index';
 export default function ModelPage({
   setLoadingProgress,
 }: {
@@ -18,6 +19,7 @@ export default function ModelPage({
 
   const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
 
@@ -73,29 +75,25 @@ export default function ModelPage({
     };
   }, []);
 
-  useEffect(() => {
+  const updateSize = debounce(() => {
     if (!sceneRef.current) return;
-    const { scene, renderer, camera, composer, sizes } = sceneRef.current;
+    const { camera, renderer, composer, sizes } = sceneRef.current;
 
-    sizes.width = viewWidth;
-    sizes.height = viewHeight;
-    sizes.pixelRatio = Math.min(window.devicePixelRatio, 2);
+    const w = isSwap ? viewHeight : viewWidth;
+    const h = isSwap ? viewWidth : viewHeight;
 
-    // sceneRef.current.resize();
+    sizes.width = w;
+    sizes.height = h;
+    // sizes.pixelRatio = Math.min(window.devicePixelRatio, 2);
 
-    console.log('resize', sizes);
-    sizes.width = viewWidth;
-    sizes.height = viewHeight;
-    camera.aspect = viewWidth / viewHeight;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(viewWidth, viewHeight);
-    composer?.setSize(viewWidth, viewHeight);
+    renderer.setSize(w, h);
+    composer?.setSize(w, h);
+  }, 100);
 
-    if (isSwap) {
-      sceneRef.current.camera.position.set(0, 0, 7);
-    } else {
-      sceneRef.current.camera.position.set(0, 0, 5);
-    }
+  useEffect(() => {
+    updateSize();
   }, [isSwap, viewWidth, viewHeight]);
 
   return (
@@ -108,8 +106,8 @@ export default function ModelPage({
             position: 'fixed',
             top: 0,
             left: 0,
-            width: `${viewHeight}px`,
-            height: `${viewWidth}px`,
+            width: '100%',
+            height: '100%',
             touchAction: 'none',
           }}
         ></canvas>

@@ -1,91 +1,123 @@
 import { Color, Vector2, Vector3, Matrix4 } from 'three';
 
-/**
- * 3D 场景全局配置（常量 + 主题色 + 工具方法）
- * 替代原来的 _O 类
- */
-export class ConstantConfig {
-  // ===================== 1. 单例模式（全局唯一） =====================
-  private static _instance: ConstantConfig;
-  static get instance(): ConstantConfig {
-    if (!ConstantConfig._instance) ConstantConfig._instance = new ConstantConfig();
-    return ConstantConfig._instance;
-  }
+export interface ColorThemeItem {
+  col: Color;
+  hsl?: { h: number; s: number; l: number };
+  bgUrl: string;
+  rough?: number;
+  metal?: number;
+  tcar?: any;
+  tw?: any;
+  twr?: any;
+  tf?: any;
+}
 
-  // ===================== 2. 基础常量 =====================
-  readonly maxSpeed = 20;
-  readonly speedUpDuration = 2;
-  readonly LAYER_CAPTURE = 31;
-  readonly LAYER_PLANE_REFLECT = 29;
-  readonly lightUpTime = 2;
+export interface TextureMapping {
+  [key: string]: keyof typeof SCENE_CONFIG;
+}
 
-  // ===================== 3. 3D 模型引用 =====================
-  sm_car: any = null;
-  sm_size: any = null;
-  sm_startroom: any = null;
-  sm_speedup: any = null;
-  sm_curvature: any = null;
-  sm_windspeed: any = null;
-  sm_linecar: any = null;
-  sm_carradar: any = null;
-  sm_simpleCar: any = null;
-  sm_car_lightbar: any = null;
+export const textureObj: TextureMapping = {
+  t_saLine: 'ut_saLine',
+  't_car_body_AO.raw': 'ut_car_body_ao',
+  't_startroom_ao.raw': 'ut_startroom_ao',
+  't_startroom_light.raw': 'ut_startroom_light',
+  t_floor_normal: 'ut_floor_normal',
+  t_floor_roughness: 'ut_floor_roughness',
+  t_street: 'ut_street',
+  t_scar_matcap: 'ut_scar_matcap',
+  t_gm_car_body_bc: 'ut_car_body_t_gm',
+  t_gm02_car_body_bc: 'ut_car_body_t_gm2',
+  t_gm02_car_window_bc: 'ut_gm02_car_window_bc',
+  t_gm02_car_window_roughness: 'ut_gm02_car_window_roughness',
+  t_gm02_floor_bc: 'ut_gm02_floor_bc',
+  t_police_Car_body_BC: 'ut_police_Car_body_BC',
+  t_police_floor_bc: 'ut_police_floor_bc',
+  t_env_night: 'ut_env_night',
+  t_env_light: 'ut_env_light',
+};
 
-  // ===================== 4. Shader Uniform 贴图 =====================
-  ut_car_body_ao = { value: null };
-  ut_startroom_ao = { value: null };
-  ut_startroom_light = { value: null };
-  ut_floor_normal = { value: null };
-  ut_floor_roughness = { value: null };
-  ut_cubeCapture = { value: null };
-  ut_blurCapture = { value: null };
-  ut_saLine = { value: null };
-  ut_street = { value: null };
-  ut_scar_matcap = { value: null };
-  ut_white = { value: null };
-  ut_dark = { value: null };
-  ut_floorMap = { value: null };
+export interface UniformValue<T = any> {
+  value: T;
+}
+
+export const SCENE_CONFIG = {
+  // 基础常量
+  maxSpeed: 20,
+  speedUpDuration: 2,
+  LAYER_CAPTURE: 31,
+  LAYER_PLANE_REFLECT: 29,
+  lightUpTime: 2,
+
+  // 3D 模型引用
+  sm_car: null as any,
+  sm_size: null as any,
+  sm_startroom: null as any,
+  sm_speedup: null as any,
+  sm_curvature: null as any,
+  sm_windspeed: null as any,
+  sm_linecar: null as any,
+  sm_carradar: null as any,
+  sm_simpleCar: null as any,
+  sm_car_lightbar: null as any,
+
+  // Shader Uniform 贴图
+  ut_car_body_ao: { value: null } as UniformValue,
+  ut_startroom_ao: { value: null } as UniformValue,
+  ut_startroom_light: { value: null } as UniformValue,
+  ut_floor_normal: { value: null } as UniformValue,
+  ut_floor_roughness: { value: null } as UniformValue,
+  ut_cubeCapture: { value: null } as UniformValue,
+  ut_blurCapture: { value: null } as UniformValue,
+  ut_saLine: { value: null } as UniformValue,
+  ut_street: { value: null } as UniformValue,
+  ut_scar_matcap: { value: null } as UniformValue,
+  ut_white: { value: null } as UniformValue,
+  ut_dark: { value: null } as UniformValue,
+  ut_floorMap: { value: null } as UniformValue,
 
   // 主题专用贴图
-  ut_car_body_t_gm = { value: null };
-  ut_car_body_t_gm2 = { value: null };
-  ut_gm02_car_window_bc = { value: null };
-  ut_gm02_car_window_roughness = { value: null };
-  ut_gm02_floor_bc = { value: null };
-  ut_police_Car_body_BC = { value: null };
-  ut_police_floor_bc = { value: null };
-  ut_env_night = { value: null };
-  ut_env_light = { value: null };
+  ut_car_body_t_gm: { value: null } as UniformValue,
+  ut_car_body_t_gm2: { value: null } as UniformValue,
+  ut_gm02_car_window_bc: { value: null } as UniformValue,
+  ut_gm02_car_window_roughness: { value: null } as UniformValue,
+  ut_gm02_floor_bc: { value: null } as UniformValue,
+  ut_police_Car_body_BC: { value: null } as UniformValue,
+  ut_police_floor_bc: { value: null } as UniformValue,
+  ut_env_night: { value: null } as UniformValue,
+  ut_env_light: { value: null } as UniformValue,
 
-  // ===================== 5. Shader 全局控制变量 =====================
-  u_time = { value: 0 };
-  u_car_envMapIntensity = { value: 1 };
-  u_floor_typeSwitch = { value: 0 };
-  u_speedUpBackgroundValue = { value: 0 };
-  u_car_discard = { value: 1 };
-  u_speedTime = { value: 0 };
-  u_floorLightMapIntensity = { value: 0 };
-  u_floorLightMapColor = { value: new Color('#000000') };
-  u_floorReflectIntensity = { value: 0 };
-  u_floorUVOffset = { value: new Vector2() };
-  u_simpleCarCenter1 = { value: new Vector3() };
-  u_simpleCarCenter2 = { value: new Vector3() };
-  u_policeColorChange = { value: 0 };
+  // Shader 全局控制变量
+  u_time: { value: 0 } as UniformValue<number>,
+  u_car_envMapIntensity: { value: 1 } as UniformValue<number>,
+  u_floor_typeSwitch: { value: 0 } as UniformValue<number>,
+  u_speedUpBackgroundValue: { value: 0 } as UniformValue<number>,
+  u_car_discard: { value: 1 } as UniformValue<number>,
+  u_speedTime: { value: 0 } as UniformValue<number>,
+  u_floorLightMapIntensity: { value: 0 } as UniformValue<number>,
+  u_floorLightMapColor: { value: new Color('#000000') } as UniformValue<Color>,
+  u_floorReflectIntensity: { value: 0 } as UniformValue<number>,
+  u_floorUVOffset: { value: new Vector2() } as UniformValue<Vector2>,
+  u_simpleCarCenter1: { value: new Vector3() } as UniformValue<Vector3>,
+  u_simpleCarCenter2: { value: new Vector3() } as UniformValue<Vector3>,
+  u_policeColorChange: { value: 0 } as UniformValue<number>,
 
-  u_reflect = {
+  u_reflect: {
     u_reflectTexture: { value: null },
     u_reflectMatrix: { value: new Matrix4() },
-  };
+  },
 
   // 车窗原始数据
-  u_m_car_window_orignData = {
+  u_m_car_window_orignData: {
     opacity: 0,
     roughness: 0,
     color: new Color(),
-  };
+  } as {
+    opacity: number;
+    roughness: number;
+    color: Color;
+  },
 
-  // ===================== 6. 颜色主题库（12 套） =====================
-  colors = new Map<string, any>([
+  colors: new Map<string, ColorThemeItem>([
     [
       'custom',
       {
@@ -173,7 +205,7 @@ export class ConstantConfig {
       {
         col: new Color('#FFFFFF').convertSRGBToLinear(),
         bgUrl: 'b10.png',
-        tcar: this.ut_car_body_t_gm,
+        tcar: { value: null },
       },
     ],
     [
@@ -183,10 +215,10 @@ export class ConstantConfig {
         bgUrl: 'b12.png',
         rough: 0.7,
         metal: 0,
-        tcar: this.ut_car_body_t_gm2,
-        tw: this.ut_gm02_car_window_bc,
-        twr: this.ut_gm02_car_window_roughness,
-        tf: this.ut_gm02_floor_bc,
+        tcar: { value: null },
+        tw: { value: null },
+        twr: { value: null },
+        tf: { value: null },
       },
     ],
     [
@@ -194,75 +226,82 @@ export class ConstantConfig {
       {
         col: new Color('#FFFFFF').convertSRGBToLinear(),
         bgUrl: 'b13.png',
-        tcar: this.ut_police_Car_body_BC,
-        tf: this.ut_police_floor_bc,
+        tcar: { value: null },
+        tf: { value: null },
       },
     ],
-  ]);
+  ]),
 
-  // ===================== 7. 当前材质默认值 =====================
-  u_carColor = { value: this.colors.get('00')!.col.clone() };
-  u_carMetalness = { value: this.colors.get('00')!.metal };
-  u_carRoughness = { value: 0 };
+  u_carColor: { value: new Color() } as UniformValue<Color>,
+  u_carMetalness: { value: 0 } as UniformValue<number>,
+  u_carRoughness: { value: 0 } as UniformValue<number>,
+};
 
-  // ===================== 工具方法 =====================
+const defaultTheme = SCENE_CONFIG.colors.get('00')!;
+SCENE_CONFIG.u_carColor.value.copy(defaultTheme.col);
+SCENE_CONFIG.u_carMetalness.value = defaultTheme.metal ?? 0;
+SCENE_CONFIG.u_carRoughness.value = defaultTheme.rough ?? 0;
 
-  /**
-   * 从 URL 解析自定义颜色
-   * 返回：custom / 00 / 01 ...
-   */
-  getCustomParams(): string {
-    if (typeof window === 'undefined') return '00';
+const color10 = SCENE_CONFIG.colors.get('10')!;
+color10.tcar = SCENE_CONFIG.ut_car_body_t_gm2;
+color10.tw = SCENE_CONFIG.ut_gm02_car_window_bc;
+color10.twr = SCENE_CONFIG.ut_gm02_car_window_roughness;
+color10.tf = SCENE_CONFIG.ut_gm02_floor_bc;
 
-    const r = new URLSearchParams(window.location.search).get('v');
-    if (r && r.length === 10) {
-      const rough = parseInt(r.slice(6, 8), 16) / 255;
-      const metal = parseInt(r.slice(8, 10), 16) / 255;
-      const hex = r.slice(0, 6);
+const color09 = SCENE_CONFIG.colors.get('09')!;
+color09.tcar = SCENE_CONFIG.ut_car_body_t_gm;
 
-      const custom = this.colors.get('custom')!;
-      if (rough) custom.rough = rough;
-      if (metal) custom.metal = metal;
-      if (hex) {
-        const color = new Color(`#${hex}`);
-        custom.col.copy(color);
-        color.convertLinearToSRGB();
-        color.getHSL(custom.hsl);
-      }
-      return 'custom';
+const color11 = SCENE_CONFIG.colors.get('11')!;
+color11.tcar = SCENE_CONFIG.ut_police_Car_body_BC;
+color11.tf = SCENE_CONFIG.ut_police_floor_bc;
+
+export function getCustomParams(): string {
+  if (typeof window === 'undefined') return '00';
+
+  const r = new URLSearchParams(window.location.search).get('v');
+  if (r && r.length === 10) {
+    const rough = parseInt(r.slice(6, 8), 16) / 255;
+    const metal = parseInt(r.slice(8, 10), 16) / 255;
+    const hex = r.slice(0, 6);
+
+    const custom = SCENE_CONFIG.colors.get('custom')!;
+    if (rough) custom.rough = rough;
+    if (metal) custom.metal = metal;
+    if (hex) {
+      const color = new Color(`#${hex}`);
+      custom.col.copy(color);
+      color.convertLinearToSRGB();
+      color.getHSL(custom.hsl!);
     }
-
-    if (r && r.includes('h') && r.length === 3) {
-      return r.slice(1, 3);
-    }
-
-    return '00';
+    return 'custom';
   }
 
-  /**
-   * 从 URL 解析自定义颜色
-   * 返回：custom / 00 / 01 ...
-   */
+  if (r && r.includes('h') && r.length === 3) {
+    return r.slice(1, 3);
+  }
 
-  generateCustomParams(currentColorIndex: string): string {
-    const DEBUG = process.env.NODE_ENV === 'development';
-    const base = DEBUG ? 'http://192.168.23.49:5173/su7?v=' : 'https://gamemcu.com/su7?v=';
+  return '00';
+}
 
-    if (currentColorIndex === 'custom') {
-      const custom = this.colors.get('custom')!;
-      const rough = Math.round(custom.rough * 255)
-        .toString(16)
-        .padStart(2, '0');
-      const metal = Math.round(custom.metal * 255)
-        .toString(16)
-        .padStart(2, '0');
-      const hex = custom.col.getHexString();
-      return base + hex + rough + metal;
-    } else {
-      return base + 'h' + currentColorIndex;
-    }
+export function generateCustomParams(currentColorIndex: string): string {
+  const DEBUG = process.env.NODE_ENV === 'development';
+  const base = DEBUG ? 'http://192.168.23.49:5173/su7?v=' : 'https://gamemcu.com/su7?v=';
+
+  if (currentColorIndex === 'custom') {
+    const custom = SCENE_CONFIG.colors.get('custom')!;
+    const rough = Math.round((custom.rough || 0) * 255)
+      .toString(16)
+      .padStart(2, '0');
+    const metal = Math.round((custom.metal || 0) * 255)
+      .toString(16)
+      .padStart(2, '0');
+    const hex = custom.col.getHexString();
+    return base + hex + rough + metal;
+  } else {
+    return base + 'h' + currentColorIndex;
   }
 }
 
-// 全局单例导出
-export const SCENE_CONFIG = ConstantConfig.instance;
+export const ConstantConfig = {
+  instance: SCENE_CONFIG,
+};

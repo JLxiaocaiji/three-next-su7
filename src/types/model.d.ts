@@ -20,3 +20,15 @@ export type AllModelsLoadedCallback = (
   loadedResults: ModelLoadResult[],
   allSuccess: boolean
 ) => void;
+
+export interface ModelMeshData {
+  meshes: THREE.Mesh[];
+  materials: Record<string, THREE.Material>;
+  textures: Record<string, THREE.Texture>;
+}
+export interface ModelGroup extends THREE.Group {
+  userData: {
+    animations?: THREE.AnimationClip[];
+    meshData?: ModelMeshData;
+  };
+}

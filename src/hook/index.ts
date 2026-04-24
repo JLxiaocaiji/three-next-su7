@@ -29,10 +29,6 @@ export const useIsSwapWidthAndHeight = () => {
 
     let w = window.innerWidth;
     let h = window.innerHeight;
-    console.log('update', swap, w, h);
-    if (swap) {
-      [w, h] = [h, w];
-    }
 
     setViewWidth(w);
     setViewHeight(h);

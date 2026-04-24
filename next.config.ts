@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
         moduleIds: 'named',
       };
     }
+    config.module.rules.push({
+      test: /\.(glsl|vert|frag)$/,
+      use: ['raw-loader', 'glslify-loader'],
+    });
     return config;
   },
 

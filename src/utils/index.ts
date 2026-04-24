@@ -7,3 +7,14 @@ export const getFileSize = async (url: string): Promise<number> => {
     return 0;
   }
 };
+
+export const debounce = <T extends (...args: any[]) => void>(
+  func: T,
+  delay = 100
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};

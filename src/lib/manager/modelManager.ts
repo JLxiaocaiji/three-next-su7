@@ -1,10 +1,11 @@
 // app/lib/ModelManager.ts
 'use client';
 
+import * as THREE from 'three';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-
+import type { ModelMeshData, ModelGroup } from '@/types/model';
 import { CacheKey } from '@/types/index';
 import { getFileSize } from '@/utils';
 
@@ -20,7 +21,7 @@ export interface ModelFileInfo {
 export interface ModelLoadResult {
   fileInfo: ModelFileInfo;
   success: boolean;
-  data?: GLTF;
+  data?: THREE.Group;
   error?: string;
   retryCount: number;
 }
@@ -67,7 +68,7 @@ export class ModelManager {
   };
 
   private fileList: ModelFileInfo[] = [];
-  public cache = new Map<CacheKey, GLTF>();
+  public modelCache = new Map<CacheKey, THREE.Group>();
   private abortController: AbortController | null = null;
   private isLoading = false;
   private taskMap = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void }>();
@@ -146,7 +147,7 @@ export class ModelManager {
       }
       this.isLoading = false;
 
-      console.log(this.cache);
+      console.log(this.modelCache);
       return results.every((r) => r.success);
     } catch (e) {
       this.isLoading = false;
@@ -176,9 +177,9 @@ export class ModelManager {
   }
 
   // 单个加载
-  private async loadSingle(f: ModelFileInfo): Promise<GLTF> {
+  private async loadSingle(f: ModelFileInfo): Promise<THREE.Group> {
     // 检查缓存
-    if (this.cache.has(f.name)) return this.cache.get(f.name)!;
+    if (this.modelCache.has(f.name)) return this.modelCache.get(f.name)!;
 
     if (!this.gltfLoader) {
       this.initLoader();
@@ -231,16 +232,20 @@ export class ModelManager {
 
     const gltf = await this.parseGLBBuffer(glbBuffer);
 
-    this.cache.set(f.name, gltf);
-    return gltf;
+    const modelRoot = gltf.scene; // 拿到 3D 根节点
+    modelRoot.userData.animations = gltf.animations || ([] as THREE.AnimationClip[]);
+    modelRoot.userData.meshData = this.traverseAndCollectModelData(modelRoot) as ModelMeshData;
+
+    this.modelCache.set(f.name, modelRoot);
+    return modelRoot;
   }
 
   public getCache(cacheName: CacheKey) {
-    if (this.cache.has(cacheName)) return this.cache.get(cacheName)!;
+    if (this.modelCache.has(cacheName)) return this.modelCache.get(cacheName)!;
   }
 
   public getAllCache() {
-    return this.cache;
+    return this.modelCache;
   }
 
   cancel() {
@@ -248,7 +253,7 @@ export class ModelManager {
     this.isLoading = false;
   }
   clearCache() {
-    this.cache.clear();
+    this.modelCache.clear();
   }
   isBusy() {
     return this.isLoading;
@@ -406,6 +411,55 @@ export class ModelManager {
     // 剩余 padding 自动为 0（无需显式填充）
 
     return buffer;
+  }
+
+  // 递归遍历场景，收集所有模型数据
+  private traverseAndCollectModelData(
+    root: THREE.Object3D,
+    result: {
+      meshes: THREE.Mesh[];
+      materials: Record<string, THREE.Material>;
+      textures: Record<string, THREE.Texture>;
+    } = { meshes: [], materials: {}, textures: {} }
+  ) {
+    const TEXTURE_PROPERTIES = [
+      'alphaMap',
+      'aoMap',
+      'bumpMap',
+      'displacementMap',
+      'emissiveMap',
+      'envMap',
+      'lightMap',
+      'metalnessMap',
+      'normalMap',
+      'roughnessMap',
+      'specularMap',
+    ];
+    root.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        const material = node.material;
+
+        // 收集所有 Mesh
+        result.meshes.push(node);
+
+        // 收集材质（以材质名称为 key）
+        if (material.name) {
+          result.materials[material.name] = material;
+        }
+
+        // 收集材质上所有贴图（以 uuid 为 key）
+        let texture: THREE.Texture | null = null;
+        for (const mapName of TEXTURE_PROPERTIES) {
+          texture = material[mapName as keyof typeof material];
+          if (texture instanceof THREE.Texture) {
+            result.textures[texture.uuid] = texture;
+          }
+        }
+      }
+    });
+
+    // 返回整理完成的数据
+    return result;
   }
 
   public static getInstanceVersion(): number {
