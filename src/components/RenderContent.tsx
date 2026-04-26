@@ -40,21 +40,6 @@ export default function ModelPage({
     const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     scene.add(ambientLight);
 
-    // 主光源: 方向光 (产生明暗对比)
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(2, 5, 3);
-    directionalLight.castShadow = true;
-    directionalLight.receiveShadow = false;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 8;
-    directionalLight.shadow.camera.left = -5;
-    directionalLight.shadow.camera.right = 5;
-    directionalLight.shadow.camera.top = 5;
-    directionalLight.shadow.camera.bottom = -5;
-    scene.add(directionalLight);
-
     sceneRef.current.startRender();
 
     return () => {

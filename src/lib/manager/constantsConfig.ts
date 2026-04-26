@@ -103,7 +103,7 @@ export const SCENE_CONFIG = {
 
   u_reflect: {
     u_reflectTexture: { value: null },
-    u_reflectMatrix: { value: new Matrix4() },
+    u_reflectMatrix: { value: null },
   },
 
   // 车窗原始数据

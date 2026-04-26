@@ -9,7 +9,8 @@ import { SCENE_CONFIG, textureObj } from './constantsConfig';
 import { noise2d } from '@/shaders/noise2d';
 import { customVertexShader } from '@/shaders/customVertexShader';
 import { randomColorShader } from '@/shaders/randomColorShader';
-import { vec3 } from 'three/src/nodes/TSL.js';
+import { reflectVertexShader } from '@/shaders/reflectVertexShader';
+import { reflectFragmentShader } from '@/shaders/reflectFragmentShader';
 
 /**
  * 材质管理器
@@ -209,6 +210,9 @@ export class MaterialManager {
     roughness: 0,
     color: new THREE.Color(),
   };
+
+  // 发光材质
+  public startroomLightMaterial: THREE.MeshStandardMaterial;
 
   private constructor() {
     this.textureConfig.sort((a, b) => a.priority - b.priority);
@@ -1424,6 +1428,255 @@ export class MaterialManager {
 
     this.materials.set(key, mat);
     return mat;
+  }
+
+  // 创建反射材质
+  public createReflectMaterial(mesh: THREE.Mesh) {
+    if (!mesh) {
+      console.warn('ReflectMaterial: no mesh parameter');
+      return;
+    }
+
+    // 2. 定义【反射材质基础Uniform变量】
+    const baseUniforms: THREE.ShaderMaterial['uniforms'] = {
+      // 基础PBR材质属性
+      color: { value: new THREE.Color() },
+      map: SCENE_CONFIG.ut_floorMap,
+      opacity: { value: 1 },
+      // 粗糙度/金属度
+      roughness: { value: 1 },
+      roughnessMap: { value: null },
+      metalness: { value: 1 },
+      metalnessMap: { value: null },
+
+      // 环境光遮蔽 + 光照贴图
+      aoMap: { value: null },
+      lightMap: { value: null },
+      lightMapColor: SCENE_CONFIG.u_floorLightMapColor,
+      lightMapIntensity: { value: 1 },
+
+      // 自发光
+      emissive: { value: new THREE.Color() },
+      emissiveMap: { value: null },
+
+      // 法线贴图
+      normalMap: { value: null },
+      distortionScale: { value: 0 },
+
+      // 项目自定义反射/地面参数
+      u_lightIntensity: SCENE_CONFIG.u_floorLightMapIntensity,
+      u_reflectIntensity: SCENE_CONFIG.u_floorReflectIntensity,
+      u_floor_typeSwitch: SCENE_CONFIG.u_floor_typeSwitch,
+      ut_street: SCENE_CONFIG.ut_street,
+      u_floorUVOffset: SCENE_CONFIG.u_floorUVOffset,
+
+      // 继承全局雾、灯光、反射配置
+      fog: {
+        fogDensity: { value: 0.00025 },
+        fogNear: { value: 1 },
+        fogFar: { value: 2000 },
+        fogColor: { value: new THREE.Color(0xffffff) },
+      },
+      lights: {
+        // 环境光
+        ambientLightColor: { value: [] },
+        // 光探针
+        lightProbe: { value: [] },
+
+        // 方向光
+        directionalLights: {
+          value: [],
+          properties: { direction: {}, color: {} },
+        },
+        // 方向光阴影
+        directionalLightShadows: {
+          value: [],
+          properties: { shadowBias: {}, shadowNormalBias: {}, shadowRadius: {}, shadowMapSize: {} },
+        },
+        directionalShadowMap: { value: [] },
+        directionalShadowMatrix: { value: [] },
+
+        // 聚光灯
+        spotLights: {
+          value: [],
+          properties: {
+            color: {},
+            position: {},
+            direction: {},
+            distance: {},
+            coneCos: {},
+            penumbraCos: {},
+            decay: {},
+          },
+        },
+        spotLightShadows: {
+          value: [],
+          properties: { shadowBias: {}, shadowNormalBias: {}, shadowRadius: {}, shadowMapSize: {} },
+        },
+        spotLightMap: { value: [] },
+        spotShadowMap: { value: [] },
+        spotLightMatrix: { value: [] },
+
+        // 点光源
+        pointLights: {
+          value: [],
+          properties: { color: {}, position: {}, decay: {}, distance: {} },
+        },
+        pointLightShadows: {
+          value: [],
+          properties: {
+            shadowBias: {},
+            shadowNormalBias: {},
+            shadowRadius: {},
+            shadowMapSize: {},
+            shadowCameraNear: {},
+            shadowCameraFar: {},
+          },
+        },
+        pointShadowMap: { value: [] },
+        pointShadowMatrix: { value: [] },
+
+        // 半球光
+        hemisphereLights: {
+          value: [],
+          properties: { direction: {}, skyColor: {}, groundColor: {} },
+        },
+
+        // 矩形区域光
+        rectAreaLights: {
+          value: [],
+          properties: { color: {}, position: {}, width: {}, height: {} },
+        },
+
+        // 矩形光LTC算法纹理
+        ltc_1: { value: null },
+        ltc_2: { value: null },
+      },
+      ...SCENE_CONFIG.u_reflect,
+    };
+
+    // 3. 定义【着色器宏定义】(控制贴图开关)
+    const shaderDefines: Record<string, string | boolean> = {
+      USE_MAP: '',
+      USE_ROUGHNESS_MAP: '',
+    };
+
+    // 4. 获取网格的原始材质
+    const originalMaterial = mesh.material as THREE.MeshPhysicalMaterial;
+
+    // 5. 若存在原始标准材质，继承其属性到Shader材质
+    if (originalMaterial) {
+      // 继承基础颜色 + 透明度
+      baseUniforms.color.value = originalMaterial.color;
+      shaderDefines.USE_MAP = ''; // 启用纹理
+      baseUniforms.opacity.value = originalMaterial.opacity;
+
+      // 继承 粗糙度贴图
+      if (originalMaterial.roughnessMap) {
+        baseUniforms.roughnessMap.value = originalMaterial.roughnessMap;
+        shaderDefines.USE_ROUGHNESS_MAP = '';
+      }
+
+      // 继承 金属度贴图
+      baseUniforms.metalness = { value: originalMaterial.metalness };
+      if (originalMaterial.metalnessMap) {
+        baseUniforms.metalnessMap.value = originalMaterial.metalnessMap;
+        shaderDefines.USE_METALNESS_MAP = '';
+      }
+
+      // 继承 自发光属性
+      baseUniforms.emissive = { value: originalMaterial.emissive };
+      if (originalMaterial.emissiveMap) {
+        baseUniforms.emissiveMap.value = originalMaterial.emissiveMap;
+        shaderDefines.USE_EMISSIVE_MAP = '';
+      }
+
+      // 继承 AO贴图
+      if (originalMaterial.aoMap) {
+        baseUniforms.aoMap.value = originalMaterial.aoMap;
+        shaderDefines.USE_AO_MAP = '';
+      }
+
+      // 继承 光照贴图
+      baseUniforms.lightMapIntensity = { value: originalMaterial.lightMapIntensity };
+      if (originalMaterial.lightMap) {
+        baseUniforms.lightMap.value = originalMaterial.lightMap;
+        shaderDefines.USE_LIGHT_MAP = '';
+      }
+
+      // 继承 法线贴图 (设置各向异性=4)
+      if (originalMaterial.normalMap) {
+        originalMaterial.normalMap.anisotropy = 4;
+        baseUniforms.normalMap.value = originalMaterial.normalMap;
+        shaderDefines.USE_NORMAL_MAP = '';
+      }
+
+      // 6. 创建自定义反射Shader材质，替换网格原有材质
+      const reflectShaderMaterial = new THREE.ShaderMaterial({
+        defines: shaderDefines,
+        uniforms: baseUniforms,
+        vertexShader: reflectVertexShader,
+        fragmentShader: reflectFragmentShader,
+      });
+
+      // 材质命名
+      reflectShaderMaterial.name = 'M_Reflect';
+      // 核心：将反射材质赋值给网格
+      mesh.material = reflectShaderMaterial;
+    } else {
+      // 无原始材质时打印日志
+      console.log('ReflectMaterial: err');
+    }
+  }
+
+  /**
+   * sm_startroom 发光材质控制
+   * @param mesh
+   */
+  public initStartroomLightMaterial(mesh: ModelGroup): void {
+    if (!mesh.userData.meshData) return;
+    this.startroomLightMaterial = mesh.userData.meshData.materials.light;
+    console.log('startroomLightMaterial', this.startroomLightMaterial);
+    this.startroomLightMaterial;
+
+    // 设置自发光颜色为 黑色（关闭发光）
+    this.startroomLightMaterial.emissive.setRGB(0, 0, 0);
+    // 开启透明通道
+    this.startroomLightMaterial.transparent = true;
+    // 关闭深度写入防止闪烁/遮挡BUG
+    this.startroomLightMaterial.depthWrite = false;
+
+    // 设置初始不透明度
+    this.startroomLightMaterial.opacity = 1;
+    // 强制材质更新
+    this.startroomLightMaterial.needsUpdate = true;
+  }
+
+  // 自发光强度 getter/setter
+  get lightEmissiveIntensity(): number {
+    return this.startroomLightMaterial.emissiveIntensity;
+  }
+
+  set lightEmissiveIntensity(value: number) {
+    this.startroomLightMaterial.emissiveIntensity = value;
+  }
+
+  // 自发光颜色 getter/setter
+  get lightEmissiveColor(): THREE.Color {
+    return this.startroomLightMaterial.emissive;
+  }
+
+  set lightEmissiveColor(value: THREE.Color) {
+    this.startroomLightMaterial.emissive.copy(value);
+  }
+
+  // 自发光透明度 getter/setter
+  get opacity(): number {
+    return this.startroomLightMaterial.opacity;
+  }
+
+  set opacity(value: number) {
+    this.startroomLightMaterial.opacity = value;
   }
 
   // ==============================================

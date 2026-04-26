@@ -8,6 +8,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import type { ModelMeshData, ModelGroup } from '@/types/model';
 import { CacheKey } from '@/types/index';
 import { getFileSize } from '@/utils';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 
 // ==================== 类型 ====================
 export interface ModelFileInfo {
@@ -71,7 +72,8 @@ export class ModelManager {
   public modelCache = new Map<CacheKey, THREE.Group>();
   private abortController: AbortController | null = null;
   private isLoading = false;
-  private taskMap = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  // 反射平面
+  public reflectorPlane: Reflector | null = null;
 
   private constructor() {
     this.fileList = this.fileConfigs
@@ -82,7 +84,15 @@ export class ModelManager {
         isBin: c.suffix === '.bin',
       }))
       .sort((a, b) => a.priority - b.priority);
+
     this.initLoader();
+
+    // 反射平面
+    this.reflectorPlane = new Reflector(new THREE.PlaneGeometry(1000, 1000), {
+      color: 0x7f7f7f,
+      textureWidth: 1024,
+      textureHeight: 1024,
+    });
   }
 
   public static getInstance() {

@@ -14,6 +14,10 @@ import {
 
 import { ModelManager } from './modelManager';
 import { MaterialManager } from './materialManager';
+import { ReflectManager } from './reflectManager';
+import { EnvironmentManager } from './environManager';
+import { PosterGenerator } from './posterGenerator';
+import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
 import type * as DatGUIType from 'dat.gui';
 
 import { CacheKey } from '@/types/index';
@@ -44,6 +48,10 @@ export interface ModelGroup extends THREE.Group {
  */
 export class SceneManager {
   private static instance: SceneManager | null = null;
+  public readonly modelManager: ModelManager;
+  public readonly materialManager: MaterialManager;
+  // 反射
+  public reflectManager: ReflectManager | null = null;
 
   public readonly scene: THREE.Scene;
   // 相机
@@ -51,8 +59,6 @@ export class SceneManager {
   public readonly renderer: THREE.WebGLRenderer;
   public readonly sizes: { width: number; height: number; pixelRatio: number };
   public readonly controls: OrbitControls;
-  public readonly modelManager: ModelManager;
-  public readonly materialManager: MaterialManager;
 
   // 立体相机
   public cubeCamera: THREE.CubeCamera | null = null;
@@ -65,6 +71,17 @@ export class SceneManager {
     t_env_night: null,
     t_env_light: null,
   };
+
+  // 海报generator
+  public posterGenerator: PosterGenerator | null = null;
+  // 环境贴图管理
+  private envController: EnvironmentManager | null = null;
+
+  // 设置 起始房间 发光材质设置
+  // public startroomLightMaterialManager: ;
+
+  // 反射探针 提供 局部环境贴图校正
+  public boxProjectionReflectionManager: BoxProjectionReflectionManager | null = null;
 
   // 后期处理
   public composer: EffectComposer | null = null;
@@ -205,8 +222,6 @@ export class SceneManager {
 
       this.initMaterials();
 
-      this.init();
-
       /*
        初始化加载 t_env_night.hdr、t_env_light.hdr
        */
@@ -319,8 +334,57 @@ export class SceneManager {
     sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
   }
 
-  public init(): void {
+  public createScene(): void {
+    // this.posterGenerator = new PosterGenerator(this.renderer);
+    // this.posterGenerator?.enabled = false;
     this.scene.background = new THREE.Color(0, 0, 0);
+
+    // 反射
+    const planeGeo = new THREE.PlaneGeometry(10, 10);
+    const planeMat = new THREE.MeshStandardMaterial({
+      color: 0xaaaaaa,
+      side: THREE.DoubleSide,
+    });
+    const reflectPlane = new THREE.Mesh(planeGeo, planeMat);
+    reflectPlane.rotation.x = -Math.PI / 2; // 平放作为地面
+    this.scene.add(reflectPlane);
+
+    this.reflectManager = new ReflectManager(
+      this.camera,
+      this.renderer,
+      this.scene,
+      reflectPlane,
+      new THREE.Vector2(1024, 1024),
+      29,
+      0
+    );
+    SCENE_CONFIG.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
+    SCENE_CONFIG.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
+
+    // sm_startroom 设置反射
+    const sm_startroomModelCache = this.modelManager.getCache(
+      'sm_startroom.raw' as CacheKey
+    ) as ModelGroup;
+    sm_startroomModelCache!.traverse((item) => {
+      console.log(item.name);
+      if (item.name === 'ReflecFloor' || item.name === 'Floor') {
+        this.materialManager.createReflectMaterial(item as THREE.Mesh);
+      }
+    });
+
+    // 创建环境贴图管理器
+    this.envController = new EnvironmentManager(
+      this.scene,
+      this.envMaps.t_env_night as THREE.Texture,
+      this.envMaps.t_env_light as THREE.Texture
+    );
+    // 设置 起始房间 发光材质设置
+    this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
+    // this.startroomLightMaterialManager = this.materialManager.startroomLightMaterial
+
+    this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(SCENE_CONFIG.sm_car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
+    this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
+    this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
   }
 
   // 后期处理
@@ -379,7 +443,6 @@ export class SceneManager {
   public resize(): void {
     this.sizes.width = window.innerWidth;
     this.sizes.height = window.innerHeight;
-    console.log('resize', this.sizes.width, this.sizes.height);
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
