@@ -18,3 +18,19 @@ export const debounce = <T extends (...args: any[]) => void>(
     timeoutId = setTimeout(() => func(...args), delay);
   };
 };
+
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+export const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(v, max));
+export const fbm = (octaves: number, x: number) => {
+  let sum = 0;
+  let amp = 1;
+  let freq = 1;
+  let max = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * Math.sin(x * freq);
+    max += amp;
+    amp *= 0.5;
+    freq *= 2;
+  }
+  return sum / max;
+};

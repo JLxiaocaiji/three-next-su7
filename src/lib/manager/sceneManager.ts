@@ -1,5 +1,3 @@
-'use client';
-
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
@@ -18,6 +16,8 @@ import { ReflectManager } from './reflectManager';
 import { EnvironmentManager } from './environManager';
 import { PosterGenerator } from './posterGenerator';
 import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
+import { SpringCamera, CameraController } from './cameraManager';
+import { CarMoveManager } from './carMoveManager';
 import type * as DatGUIType from 'dat.gui';
 
 import { CacheKey } from '@/types/index';
@@ -55,7 +55,8 @@ export class SceneManager {
 
   public readonly scene: THREE.Scene;
   // 相机
-  public readonly camera: THREE.PerspectiveCamera;
+  // public camera: THREE.PerspectiveCamera;
+  public camera: SpringCamera;
   public readonly renderer: THREE.WebGLRenderer;
   public readonly sizes: { width: number; height: number; pixelRatio: number };
   public readonly controls: OrbitControls;
@@ -75,7 +76,7 @@ export class SceneManager {
   // 海报generator
   public posterGenerator: PosterGenerator | null = null;
   // 环境贴图管理
-  private envController: EnvironmentManager | null = null;
+  private envManager: EnvironmentManager | null = null;
 
   // 设置 起始房间 发光材质设置
   // public startroomLightMaterialManager: ;
@@ -113,8 +114,8 @@ export class SceneManager {
       pixelRatio: Math.min(window.devicePixelRatio, 2),
     };
 
-    this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
-    this.camera.position.set(0, 0, 5);
+    // this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
+    // this.camera.position.set(0, 0, 5);
 
     // 初始化立方相机和渲染目标（用于后续实时捕获清晰反射）
     this.cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
@@ -373,7 +374,7 @@ export class SceneManager {
     });
 
     // 创建环境贴图管理器
-    this.envController = new EnvironmentManager(
+    this.envManager = new EnvironmentManager(
       this.scene,
       this.envMaps.t_env_night as THREE.Texture,
       this.envMaps.t_env_light as THREE.Texture
@@ -385,6 +386,46 @@ export class SceneManager {
     this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(SCENE_CONFIG.sm_car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
     this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
     this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
+
+    const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    this.materialManager.initCarLightMaterial(car);
+
+    this.camera = new SpringCamera({
+      springLength: 11,
+      rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
+      fov: 33.4,
+      lookAt: new THREE.Vector3(0, 0.8, 0),
+    });
+
+    const cameraController = new CameraController(this.camera, this.renderer.domElement);
+
+    /**
+     * 点击绑定事件
+     */
+    // xxxx  JO
+
+    // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
+    const carMoveManager = new CarMoveManager(car, cameraController);
+    this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
+
+    // 找到 3D 模型里名字 = "WeiYi" 的子物体
+    this.modelManager.initWeiyiModel();
+    // sm_car_lightbar 灯光控制
+    this.modelManager.initLightbarModel();
+    // sm_size
+    this.modelManager.initSizeModel();
+    // sm_curvature
+    this.modelManager.initCurvatureModel();
+    // sm_windspeed
+    this.modelManager.initWindspeedModel();
+    // sm_linecar
+    this.modelManager.initLinecarModel();
+    // sm_carradar -> m_radarPoints
+    this.modelManager.initCarRadarPointsModel();
+    // sm_carradar
+    this.modelManager.initCarradarModel();
+    // sm_simpleCar
+    this.modelManager.initSimpleCarModel();
   }
 
   // 后期处理

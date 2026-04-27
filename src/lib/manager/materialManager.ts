@@ -212,7 +212,10 @@ export class MaterialManager {
   };
 
   // 发光材质
-  public startroomLightMaterial: THREE.MeshStandardMaterial;
+  public startroomLightMaterial: THREE.MeshStandardMaterial | null = null;
+  // 汽车车灯材质
+  public carlightMaterial: THREE.MeshStandardMaterial | null = null;
+  public carlightValue: number = 0;
 
   private constructor() {
     this.textureConfig.sort((a, b) => a.priority - b.priority);
@@ -1652,6 +1655,35 @@ export class MaterialManager {
     this.startroomLightMaterial.needsUpdate = true;
   }
 
+  // 设置汽车车灯材质
+  public initCarLightMaterial(mesh: ModelGroup): void {
+    if (!mesh.userData.meshData) return;
+    this.carlightMaterial = mesh.userData.meshData.materials.Car_ight;
+    this.carlightMaterial!.toneMapped = false; // 关闭色调映射
+    this.carlightMaterial!.aoMapIntensity = 0; // 关闭AO强度
+    this.carlightMaterial!.color = new THREE.Color('#000000'); // 设置初始颜色
+    this.carlightMaterial!.needsUpdate = true; // 强制材质更新
+  }
+
+  set lightValue(value: number) {
+    this.carlightValue = value;
+    // 颜色线性插值
+    let color = SCENE_CONFIG.carlightMaterialValue.current_light_color
+      .copy(SCENE_CONFIG.carlightMaterialValue.start_light_color)
+      .lerp(SCENE_CONFIG.carlightMaterialValue.end_light_color, value);
+    this.carlightMaterial!.color = color;
+    this.carlightMaterial!.needsUpdate = true;
+  }
+
+  get lightValue(): number {
+    return this.carlightValue;
+  }
+
+  /** 获取材质实例 */
+  public get material(): THREE.MeshStandardMaterial | null {
+    return this.carlightMaterial;
+  }
+
   // 自发光强度 getter/setter
   get lightEmissiveIntensity(): number {
     return this.startroomLightMaterial.emissiveIntensity;
@@ -1676,26 +1708,52 @@ export class MaterialManager {
   }
 
   set opacity(value: number) {
-    this.startroomLightMaterial.opacity = value;
+    this.startroomLightMaterial!.opacity = value;
   }
 
-  // ==============================================
+  // 雷达点着色器材质
+  public getRadarPointMaterial(): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
+      name: 'm_radarPoints',
+      uniforms: {
+        time: { value: 0 },
+        opacity: { value: 0 },
+        vColor: { value: new THREE.Color('#ffffff') },
+      },
+      vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+      fragmentShader: `
+            varying vec2 vUv;
+            uniform float opacity;
+            uniform vec3 vColor;
+            void main() {
+              float d = length(vUv - vec2(0.5));
+              float a = smoothstep(d, 0.2, 1.0);
+              gl_FragColor = vec4(vColor, opacity * a);
+            }
+          `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+  }
+
   // 获取已存在的材质
-  // ==============================================
   public get<T extends THREE.MeshStandardMaterial>(key: string): T | undefined {
     return this.materials.get(key) as T;
   }
 
-  // ==============================================
   // 判断材质是否存在
-  // ==============================================
   public has(key: string): boolean {
     return this.materials.has(key);
   }
 
-  // ==============================================
   // 删除材质（并销毁）
-  // ==============================================
   public remove(key: string): void {
     const mat = this.materials.get(key);
     if (mat) {
@@ -1704,9 +1762,7 @@ export class MaterialManager {
     }
   }
 
-  // ==============================================
   // 清空所有材质（页面卸载时调用）
-  // ==============================================
   public disposeAll(): void {
     this.materials.forEach((mat) => mat.dispose());
     this.materials.clear();

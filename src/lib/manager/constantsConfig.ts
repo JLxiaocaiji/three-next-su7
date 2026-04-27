@@ -117,6 +117,12 @@ export const SCENE_CONFIG = {
     color: Color;
   },
 
+  carlightMaterialValue: {
+    current_light_color: new Color('#000000'),
+    start_light_color: new Color('#000000'),
+    end_light_color: new Color('#ffffff'),
+  },
+
   colors: new Map<string, ColorThemeItem>([
     [
       'custom',
