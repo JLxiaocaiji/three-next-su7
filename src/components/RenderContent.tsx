@@ -62,19 +62,13 @@ export default function ModelPage({
 
   const updateSize = debounce(() => {
     if (!sceneRef.current) return;
-    const { camera, renderer, composer, sizes } = sceneRef.current;
 
     const w = isSwap ? viewHeight : viewWidth;
     const h = isSwap ? viewWidth : viewHeight;
 
-    sizes.width = w;
-    sizes.height = h;
-    // sizes.pixelRatio = Math.min(window.devicePixelRatio, 2);
+    if (w <= 0 || h <= 0) return;
 
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-    composer?.setSize(w, h);
+    sceneRef.current.resize(w, h, isSwap);
   }, 100);
 
   useEffect(() => {

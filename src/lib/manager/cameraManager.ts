@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { gsap } from 'gsap';
-
-import { lerp, fbm, clamp } from '@/utils';
+import { lerp, PerlinNoise, clamp } from '@/utils';
 
 export class SpringCamera extends THREE.PerspectiveCamera {
   enablePositionNoise = true;
@@ -34,7 +33,7 @@ export class SpringCamera extends THREE.PerspectiveCamera {
       springLength = 2,
     } = opt;
 
-    // ✅ 调用父类构造
+    // 调用父类构造
     super(fov, window.innerWidth / window.innerHeight, near, far);
 
     this._springLength = springLength;
@@ -101,7 +100,8 @@ export class SpringCamera extends THREE.PerspectiveCamera {
     });
   }
 
-  update(delta: number) {
+  // 每帧更新（requestAnimationFrame 中调用）
+  update(delta: number): void {
     this.calculateCameraPosition();
     this.position.copy(this.targetCameraPosition);
     super.lookAt(this._lookAt);
@@ -113,9 +113,9 @@ export class SpringCamera extends THREE.PerspectiveCamera {
     }
 
     const noise = new THREE.Vector3(
-      fbm(this.positionFractalLevel, this._time[0]),
-      fbm(this.positionFractalLevel, this._time[1]),
-      fbm(this.positionFractalLevel, this._time[2])
+      PerlinNoise.fbm(this.positionFractalLevel, this._time[0]),
+      PerlinNoise.fbm(this.positionFractalLevel, this._time[1]),
+      PerlinNoise.fbm(this.positionFractalLevel, this._time[2])
     );
 
     noise.multiply(this.positionScale);

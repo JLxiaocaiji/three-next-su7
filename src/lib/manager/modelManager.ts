@@ -9,8 +9,8 @@ import { CacheKey } from '@/types/index';
 import { getFileSize } from '@/utils';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
-import { lerp, fbm, clamp } from '@/utils';
-import { SCENE_CONFIG } from './constantsConfig';
+import { lerp, PerlinNoise, clamp } from '@/utils';
+import { sceneConfig } from './constantsConfig';
 import { SceneManager } from './sceneManager';
 import { MaterialManager } from './materialManager';
 
@@ -37,6 +37,13 @@ type BinHeader = {
   version: number;
   length: number;
 };
+
+interface SpeedUpModel {
+  wheels: THREE.Object3D<THREE.Object3DEventMap> | null;
+  targetVelocity: number;
+  currentVelocity: number;
+  lerpStrength: number;
+}
 
 // 模型基础接口
 interface BaseModel {
@@ -69,6 +76,9 @@ export interface MaterialOnlyModel {
  */
 export class ModelManager {
   private static instance: ModelManager | null = null;
+  public sceneManager: SceneManager | null = null;
+  public materialManager: MaterialManager | null = null;
+
   public gltfLoader: GLTFLoader | null = null;
 
   private readonly modelDir = '/model/';
@@ -101,11 +111,16 @@ export class ModelManager {
   private abortController: AbortController | null = null;
   private isLoading = false;
 
-  public readonly sceneManager: SceneManager | null = null;
-  public readonly materialManager: MaterialManager | null = null;
-
   // 反射平面
   public reflectorPlane: Reflector | null = null;
+
+  // 加速相关（车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果）
+  public carSpeedUp: SpeedUpModel = {
+    wheels: null,
+    targetVelocity: 0,
+    currentVelocity: 0,
+    lerpStrength: 1,
+  };
 
   // 'weiyi' 模型
   public weiyiModel: PositionRotationModel = {
@@ -181,14 +196,9 @@ export class ModelManager {
       .sort((a, b) => a.priority - b.priority);
 
     this.initLoader();
+  }
 
-    // 反射平面
-    this.reflectorPlane = new Reflector(new THREE.PlaneGeometry(1000, 1000), {
-      color: 0x7f7f7f,
-      textureWidth: 1024,
-      textureHeight: 1024,
-    });
-
+  private initManager() {
     this.sceneManager = SceneManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
   }
@@ -200,6 +210,25 @@ export class ModelManager {
 
     if (!ModelManager.instance) ModelManager.instance = new ModelManager();
     return ModelManager.instance;
+  }
+
+  // 反射平面
+  public initReflector() {
+    if (this.reflectorPlane) return;
+
+    // 现在创建才安全！canvas 已有尺寸
+    this.reflectorPlane = new Reflector(new THREE.PlaneGeometry(1000, 1000), {
+      color: 0x7f7f7f,
+      textureWidth: 1024,
+      textureHeight: 1024,
+    });
+
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+
+    // 添加到场景
+    this.sceneManager.scene.add(this.reflectorPlane);
   }
 
   public async computeFileSize() {
@@ -472,20 +501,20 @@ export class ModelManager {
   }
 
   private buildGLBFromParts(header: BinHeader, content: string, body: ArrayBuffer) {
-    // 1. JSON 字符串转 UTF-8 字节数组
+    // JSON 字符串转 UTF-8 字节数组
     const encoder = new TextEncoder();
     const jsonData = encoder.encode(content);
     // GLB 要求 JSON chunk 数据长度必须是 4 字节对齐
     const jsonChunkLength = (jsonData.length + 3) & ~3; // 向上取整到 4 的倍数
     const jsonPadding = jsonChunkLength - jsonData.length;
 
-    // 2. BIN chunk 长度（body 已经是 ArrayBuffer）
+    // BIN chunk 长度（body 已经是 ArrayBuffer）
     const binChunkLength = body.byteLength;
     // BIN chunk 数据也需要 4 字节对齐（通常已经是，但保险处理）
     const binPaddedLength = (binChunkLength + 3) & ~3;
     const binPadding = binPaddedLength - binChunkLength;
 
-    // 3. 总文件长度 = 12 + (8 + jsonChunkLength) + (8 + binPaddedLength)
+    // 总文件长度 = 12 + (8 + jsonChunkLength) + (8 + binPaddedLength)
     const totalLength = 12 + 8 + jsonChunkLength + 8 + binPaddedLength;
 
     // 4. 构建 ArrayBuffer
@@ -572,6 +601,37 @@ export class ModelManager {
 
   public static getInstanceVersion(): number {
     return (ModelManager as any)._version || 0;
+  }
+
+  // 初始化 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
+  public initCarSpeedUp() {
+    const carModel = this.modelCache.get('sm_car' as CacheKey);
+    if (!carModel) return;
+
+    this.carSpeedUp.wheels =
+      carModel.children[0].children.find((item) => item.name === 'Wheels') || null;
+  }
+  public setCarSpeedRadarVisibility(value: number) {
+    this.carSpeedUp.targetVelocity = value;
+  }
+  public setLerpStrength(r: number) {
+    this.carSpeedUp.lerpStrength = r;
+  }
+
+  public carSpeedUpUpdate(value: number) {
+    this.carSpeedUp.currentVelocity = lerp(
+      this.carSpeedUp.currentVelocity,
+      this.carSpeedUp.targetVelocity,
+      value * this.carSpeedUp.lerpStrength
+    );
+
+    for (let wheel of this.carSpeedUp.wheels?.children || []) {
+      wheel.rotateZ(
+        ((-this.carSpeedUp.currentVelocity * value) / (Math.PI * 0.737774)) * 2 * Math.PI
+      );
+    }
+
+    sceneConfig.u_floorUVOffset.value.x += this.carSpeedUp.currentVelocity * value;
   }
 
   // 初始化 weiyi 模型
@@ -768,7 +828,7 @@ export class ModelManager {
 
     // 遍历材质更新
     Object.values(materials).forEach((mat: any) => {
-      SCENE_CONFIG.u_car_discard.value = 1 - value;
+      sceneConfig.u_car_discard.value = 1 - value;
 
       // 透明度
       mat.opacity = value;
@@ -875,7 +935,7 @@ export class ModelManager {
     value = THREE.MathUtils.clamp(value, 0, 1);
     this.carRadarModel.visibility = value;
 
-    SCENE_CONFIG.u_floor_typeSwitch.value = value;
+    sceneConfig.u_floor_typeSwitch.value = value;
 
     model.visible = value >= 0.005;
 
@@ -930,13 +990,13 @@ export class ModelManager {
     pos1.y = this.simpleCarData.moveParams1.y;
 
     pos1.set(
-      pos1.x + deltaTime * this.simpleCarData.moveParams1.z * this.simpleCarData.moveParams1.x，
+      pos1.x + deltaTime * this.simpleCarData.moveParams1.z * this.simpleCarData.moveParams1.x,
       pos1.y,
       this.simpleCarData.moveParams1.y
-    )
+    );
 
     // 同步到全局 shader 变量
-    SCENE_CONFIG.u_simpleCarCenter1.value.copy(pos1);
+    sceneConfig.u_simpleCarCenter1.value.copy(pos1);
     // 越界重置
     if (Math.abs(pos1.x) > length) {
       this.randomUpdate(car1, this.simpleCarData.moveParams1);
@@ -949,9 +1009,9 @@ export class ModelManager {
       pos2.x + deltaTime * this.simpleCarData.moveParams2.z * this.simpleCarData.moveParams2.x,
       pos1.y,
       -this.simpleCarData.moveParams2.y
-    )
+    );
 
-    SCENE_CONFIG.u_simpleCarCenter2.value.copy(pos2);
+    sceneConfig.u_simpleCarCenter2.value.copy(pos2);
     // 越界重置
     if (Math.abs(pos2.x) > length) {
       this.randomUpdate(car2, this.simpleCarData.moveParams2);
@@ -966,6 +1026,6 @@ export class ModelManager {
 
     const meshData = model?.userData?.meshData as ModelMeshData;
 
-    meshData.materials.m_simplecar.opacity = value;
+    meshData.materials.m_simplecar.opacity = value; // Ag
   }
 }

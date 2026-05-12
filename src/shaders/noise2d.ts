@@ -4,7 +4,7 @@ export const noise2d = `
     p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
     return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
   }
-  // 2D 噪声函数（Simplex 噪声，平滑自然）
+  // 2D 噪声函数(Simplex 噪声，平滑自然)
   float noise2d(in vec2 p) {
     const float K1 = 0.366025404; // (sqrt(3)-1)/2
     const float K2 = 0.211324865; // (3-sqrt(3))/6

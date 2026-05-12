@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import {
   SMAAEffect,
   SMAAPreset,
@@ -9,6 +8,7 @@ import {
   EffectPass,
   RenderPass,
 } from 'postprocessing';
+import type * as DatGUIType from 'dat.gui';
 
 import { ModelManager } from './modelManager';
 import { MaterialManager } from './materialManager';
@@ -18,11 +18,11 @@ import { PosterGenerator } from './posterGenerator';
 import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
 import { SpringCamera, CameraController } from './cameraManager';
 import { CarMoveManager } from './carMoveManager';
-import type * as DatGUIType from 'dat.gui';
+import { sceneConfig } from './constantsConfig';
+import { isSupportMSAA } from '@/utils/index';
+import { MipBlurPass } from '@/classes/MipBlurPass';
 
 import { CacheKey } from '@/types/index';
-
-import { SCENE_CONFIG } from './constantsConfig';
 
 export enum EnvMaps {
   t_env_night = 't_env_night',
@@ -50,22 +50,26 @@ export class SceneManager {
   private static instance: SceneManager | null = null;
   public readonly modelManager: ModelManager;
   public readonly materialManager: MaterialManager;
+
+  public cameraController: CameraController | null = null;
   // 反射
   public reflectManager: ReflectManager | null = null;
 
   public readonly scene: THREE.Scene;
   // 相机
-  // public camera: THREE.PerspectiveCamera;
-  public camera: SpringCamera;
+  public camera: THREE.PerspectiveCamera;
+  public springCamera: SpringCamera | null = null;
   public readonly renderer: THREE.WebGLRenderer;
-  public readonly sizes: { width: number; height: number; pixelRatio: number };
+  public sizes: { width: number; height: number; pixelRatio: number; factor?: number };
   public readonly controls: OrbitControls;
 
   // 立体相机
   public cubeCamera: THREE.CubeCamera | null = null;
   public cubeRenderTarget: THREE.WebGLCubeRenderTarget | null = null;
-
+  public cubeTexture: { value: THREE.CubeTexture | null } = { value: null };
   public orthographicCamera!: THREE.OrthographicCamera;
+
+  public blurPass: MipBlurPass | null = null;
 
   // envMap
   private envMaps: Record<EnvMaps, THREE.Texture | null> = {
@@ -77,9 +81,6 @@ export class SceneManager {
   public posterGenerator: PosterGenerator | null = null;
   // 环境贴图管理
   private envManager: EnvironmentManager | null = null;
-
-  // 设置 起始房间 发光材质设置
-  // public startroomLightMaterialManager: ;
 
   // 反射探针 提供 局部环境贴图校正
   public boxProjectionReflectionManager: BoxProjectionReflectionManager | null = null;
@@ -114,18 +115,10 @@ export class SceneManager {
       pixelRatio: Math.min(window.devicePixelRatio, 2),
     };
 
-    // this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
-    // this.camera.position.set(0, 0, 5);
+    this.camera = new THREE.PerspectiveCamera(45, this.sizes.width / this.sizes.height, 1, 1000);
+    this.camera.position.set(0, 0, 4);
 
     // 初始化立方相机和渲染目标（用于后续实时捕获清晰反射）
-    this.cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
-      format: THREE.RGBAFormat,
-      type: THREE.UnsignedByteType,
-      generateMipmaps: true,
-      minFilter: THREE.LinearMipmapLinearFilter,
-    });
-
-    this.cubeCamera = new THREE.CubeCamera(0.1, 1000, this.cubeRenderTarget);
 
     this.orthographicCamera = new THREE.OrthographicCamera(
       -this.sizes.width / 2,
@@ -155,12 +148,12 @@ export class SceneManager {
     const axesHelper = new THREE.AxesHelper(5);
     this.scene.add(axesHelper);
 
-    this.modelManager = ModelManager.getInstance();
-    this.materialManager = MaterialManager.getInstance();
-
     this.initPostProcessing();
     // this._initResizeHandler();
     this._initGUI();
+
+    this.modelManager = ModelManager.getInstance();
+    this.materialManager = MaterialManager.getInstance();
   }
 
   public static getInstance(container?: HTMLCanvasElement): SceneManager {
@@ -186,11 +179,44 @@ export class SceneManager {
     }
   }
 
+  public createCubeRenderTarget(
+    size: number,
+    useNearestFilter: boolean = false,
+    textureType: THREE.TextureDataType | boolean = false,
+    msaaSamples: number = 0,
+    generateMipmaps: boolean = false
+  ): THREE.WebGLCubeRenderTarget {
+    return new THREE.WebGLCubeRenderTarget(size, {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+      magFilter: useNearestFilter ? THREE.NearestFilter : THREE.LinearFilter,
+      minFilter: useNearestFilter
+        ? THREE.NearestFilter
+        : generateMipmaps
+          ? THREE.NearestMipmapLinearFilter
+          : THREE.LinearFilter,
+      type:
+        typeof textureType === 'boolean'
+          ? textureType
+            ? THREE.FloatType
+            : THREE.UnsignedByteType
+          : textureType,
+      anisotropy: 0,
+      colorSpace: THREE.SRGBColorSpace,
+      depthBuffer: false,
+      stencilBuffer: false,
+      samples: isSupportMSAA() ? msaaSamples : 0,
+      generateMipmaps: generateMipmaps,
+    });
+  }
+
   /**
    * 初始化加载
    * @returns
    */
   public async initLoad(): Promise<number> {
+    this.materialManager.ensureSceneManager();
+
     let modelTotalBytes = await this.modelManager.computeFileSize();
     let materialTotalBytes = await this.materialManager.computeFileSize();
 
@@ -220,8 +246,12 @@ export class SceneManager {
       }
 
       console.log('加载完成', allModelSuccess && allMaterialSuccess);
-
-      this.initMaterials();
+      return percent;
+    } catch (err) {
+      console.error('模型加载失败', err);
+      return percent;
+    } finally {
+      this.prepareScene();
 
       /*
        初始化加载 t_env_night.hdr、t_env_light.hdr
@@ -234,26 +264,45 @@ export class SceneManager {
       };
 
       await this.materialManager.initEnvironment('t_env_night');
-
-      // 加载完成后统一添加到场景
-
-      return percent;
-    } catch (err) {
-      console.error('模型加载失败', err);
-      return percent;
-    } finally {
-      this.materialManager.initCubeRenderTarget();
     }
   }
 
-  // 处理各种材质
-  public initMaterials(): void {
+  public prepareScene(): void {
+    // r.addNode(uB)  // 挂载音频
+    // r.addNode(mM)  // 显示UI状态， 状态 1
+
+    // 实时环境贴图生成器
+    // this._environment = r.addNode(new J3({
+    //     scene: r.scene,
+    //     layer: Ae.LAYER_CAPTURE,
+    //     resolution: 512
+    // })),
+
+    this.cubeRenderTarget = this.createCubeRenderTarget(512, false, false, 0, true);
+    this.cubeTexture.value = this.cubeRenderTarget.texture;
+    this.cubeCamera = new THREE.CubeCamera(1, 100, this.cubeRenderTarget);
+    this.cubeCamera.layers.set(sceneConfig.LAYER_CAPTURE); // 设置立方相机只渲染特定层 31
+    this.blurPass = new MipBlurPass(this.renderer, this.cubeRenderTarget);
+    this.blurPass.blurIntensity = 4.5;
+
+    // Ae.ut_cubeCapture = this._environment.cubeTexture,
+    // Ae.ut_blurCapture = this._environment.blurTexture;
+    sceneConfig.ut_cubeCapture.value = this.cubeRenderTarget.texture;
+    sceneConfig.ut_blurCapture.value = this.blurPass.blurTexture;
+
+    // this.materialManager.ut_white
+    // this.materialManager.ut_dark
+    // this.materialManager.ut_floorMap
+
+    /**
+     * 处理各种材质
+     */
     // sm_car
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
-    // if (carModelCache) this.currentModelCache.push(carModelCache);
     this.scene.add(carModelCache);
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
     carMeshData && this.materialManager.initCarMaterial(carMeshData);
+    console.log('carMeshData', this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup);
 
     // lightbar
     const lightbarModelCache = this.modelManager.getCache(
@@ -302,7 +351,7 @@ export class SceneManager {
     sm_curvatureMesh &&
       (sm_curvatureMeshData.materials.m_curvature =
         this.materialManager.initCurvatureMaterial(sm_curvatureMesh));
-    sm_curvatureMesh!.layers.enable(SCENE_CONFIG.LAYER_CAPTURE);
+    sm_curvatureMesh!.layers.enable(sceneConfig.LAYER_CAPTURE);
     Object.values(sm_curvatureMeshData.materials).forEach((item) => {
       item.transparent = true;
       item.needsUpdate = true;
@@ -359,8 +408,8 @@ export class SceneManager {
       29,
       0
     );
-    SCENE_CONFIG.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
-    SCENE_CONFIG.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
+    sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
+    sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
 
     // sm_startroom 设置反射
     const sm_startroomModelCache = this.modelManager.getCache(
@@ -380,24 +429,26 @@ export class SceneManager {
       this.envMaps.t_env_light as THREE.Texture
     );
     // 设置 起始房间 发光材质设置
+    // g = r.addNode(new qO(l))
     this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
-    // this.startroomLightMaterialManager = this.materialManager.startroomLightMaterial
 
-    this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(SCENE_CONFIG.sm_car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
+    const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+
+    this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
+    // _.probeBoxMin.set(-3, -.1, -1.5),
     this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
     this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
 
-    const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
     this.materialManager.initCarLightMaterial(car);
 
-    this.camera = new SpringCamera({
+    this.springCamera = new SpringCamera({
       springLength: 11,
       rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
       fov: 33.4,
       lookAt: new THREE.Vector3(0, 0.8, 0),
     });
 
-    const cameraController = new CameraController(this.camera, this.renderer.domElement);
+    this.cameraController = new CameraController(this.springCamera, this.renderer.domElement);
 
     /**
      * 点击绑定事件
@@ -405,7 +456,7 @@ export class SceneManager {
     // xxxx  JO
 
     // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-    const carMoveManager = new CarMoveManager(car, cameraController);
+    const carMoveManager = new CarMoveManager(car, this.cameraController);
     this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
 
     // 找到 3D 模型里名字 = "WeiYi" 的子物体
@@ -426,6 +477,22 @@ export class SceneManager {
     this.modelManager.initCarradarModel();
     // sm_simpleCar
     this.modelManager.initSimpleCarModel();
+
+    const bloom = new BloomEffect({
+      blendFunction: THREE.AdditiveBlending,
+      luminanceThreshold: 0,
+      luminanceSmoothing: 1.6,
+      mipmapBlur: true,
+      // intensity: 1.0,
+    });
+
+    this.initPostProcessing();
+
+    // this._envController = h  // this.envManager
+    // this._springCtr = U  // this.cameraController
+    // this._carLightController = m  // this.materialManager.initCarLightMaterial(car);
+    // this._topLightController = g  // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache)
+    // this._carSpeedUpdate = R // const carMoveManager = new CarMoveManager(car, this.cameraController);
   }
 
   // 后期处理
@@ -450,17 +517,28 @@ export class SceneManager {
 
   async initScene(): Promise<void> {}
 
+  // 更新实时环境贴图与模糊
+  private _updateReflection(): void {
+    // 确保所有部件都已初始化
+    if (!this.cubeCamera || !this.cubeRenderTarget || !this.blurPass) return;
+    this.cubeCamera.position.set(0, 0, 0);
+    this.cubeCamera.update(this.renderer, this.scene);
+
+    this.blurPass.update();
+  }
+
   public startRender(): void {
     if (this._animationFrameId) return;
 
     const render = () => {
       this._animationFrameId = requestAnimationFrame(render);
 
+      this._updateReflection();
+
       this.timer.update();
       this.globalUniforms.u_time.value = this.timer.getElapsed();
 
       this.controls.update();
-      this.renderer.render(this.scene, this.camera);
 
       // this.materialManager.updateEnvMap(new THREE.Vector3(0, 0, 0));
       this.composer?.render();
@@ -481,20 +559,43 @@ export class SceneManager {
     window.addEventListener('resize', this._resizeHandler);
   }
 
-  public resize(): void {
-    this.sizes.width = window.innerWidth;
-    this.sizes.height = window.innerHeight;
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.composer?.setSize(window.innerWidth, window.innerHeight);
+  public resize(width = window.innerWidth, height = window.innerHeight, isSwap = false): void {
+    this.sizes.width = width;
+    this.sizes.height = height;
+
+    // 正交相机
+    // if (camera.isOrthographicCamera) {
+    //   this._viewport = {
+    //     width: effectiveW / camera.zoom,
+    //     height: effectiveH / camera.zoom,
+    //     factor: 1,
+    //   };
+    // }
+
+    // 透视相机
+    if (this.camera.isPerspectiveCamera) {
+      if (!(this.camera as any).manual) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+      }
+
+      const cameraDist = this.camera.position.distanceTo(new THREE.Vector3());
+      const vHeight = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) * cameraDist;
+      const vWidth = vHeight * this.camera.aspect;
+      this.sizes.width = vWidth;
+      this.sizes.height = vHeight;
+      this.sizes.factor = width / vWidth;
+    }
+
+    this.renderer.setSize(width, height);
+    this.composer?.setSize(width, height);
   }
 
   public dispose(): void {
     this.stopRender();
     if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
-    if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
     if (this.smaaEffect) this.smaaEffect.dispose();
+    if (this.blurPass) this.blurPass.dispose();
 
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);

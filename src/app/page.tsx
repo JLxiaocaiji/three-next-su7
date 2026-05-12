@@ -23,7 +23,7 @@ export default function Page() {
     //     setLoadingProgress(progress.percent);
     //   },
     //   (results, allSuccess) => {
-    //     console.log('✅ 加载完成', allSuccess);
+    //     console.log('加载完成', allSuccess);
     //   }
     // );
     // return () => manager.cancel();

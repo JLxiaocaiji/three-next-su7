@@ -181,7 +181,7 @@ export class PosterGenerator {
     if (!this._frontRenderer) {
       this._frontRenderer = new THREE.WebGLRenderer({ alpha: true });
       this._frontRenderer.setPixelRatio(window.devicePixelRatio);
-      // ✅ 修复 2：outputEncoding → outputColorSpace
+      // 修复 2：outputEncoding → outputColorSpace
       this._frontRenderer.outputColorSpace = this._viewer.renderer.outputColorSpace;
     }
 
