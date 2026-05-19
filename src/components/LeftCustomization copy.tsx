@@ -1,37 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import * as THREE from 'three';
 import { hsvaToRgbaString } from '@uiw/color-convert';
-import { Hue, Saturation, ShadeSlider, Alpha, Slider } from '@uiw/react-color';
+import Hue from '@uiw/react-color-hue';
 
 import { eventBus } from '@/utils/eventBus';
 
-/**
-hsva = {
-  h: 0~360,    // 色相
-  s: 0~1,      // 饱和度
-  v: 0~1,      // 明度
-  a: 0~1       // 透明度（不用管）
-}
- * @returns 
- */
-
-const custom = {
-  col: new THREE.Color('#ffc03f').convertSRGBToLinear(),
-  hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
-  bgUrl: 'custom.png',
-  rough: 0.03,
-  metal: 0.1,
-};
 export default function LeftCustomization({ part }: { part: number }) {
   const [isVisible, setIsVisible] = useState(false);
 
-  const [hsva, setHsva] = useState({ h: 0, s: 0, v: 0, a: 1 });
-
-  const [color, setColor] = useState('#4a86ff');
-
-  const [value, setValue] = useState(20);
+  const [hsva, setHsva] = useState({ h: 0, s: 100, v: 100, a: 1 });
 
   // 接收来自 3D 类的截图结果反馈
   useEffect(() => {
@@ -121,28 +99,33 @@ export default function LeftCustomization({ part }: { part: number }) {
                           </div>
                         </div>
                       </div> */}
-
                       <Hue
                         className="SliderHue"
                         hue={hsva.h}
-                        style={{ height: '5px', borderRadius: '10px' }}
-                        radius="3px"
-                        onChange={(newValue) => {
-                          const g = custom.col;
-                          const _ = custom.hsl;
-                          // ((_.h = newValue.v / 100),
-                          //   g.setHSL(_.h, _.s, _.l).convertSRGBToLinear(),
-                          //   Ae.colors.get('custom').col.copy(g),
-                          //   Ie.emit(Ie.CHANGECOLOR, 'custom'));
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(newHue) => {
+                          setHsva({ ...hsva, ...newHue });
                         }}
+                        style={{
+                          borderRadius: '50%',
+                        }}
+                        // style={{
+                        //   '--alpha-background-color': '#fff',
+                        //   '--alpha-pointer-background-color': 'rgb(248,248,248)',
+                        //   '--alpha-pointer-box-shadow': 'rgb(0 0 0 / 37%) 0px 1px 4px 0px',
+                        //   borderRadius: '50%',
+                        //   backgroundImage:
+                        //     'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==")',
+                        //   backgroundPosition: 'left center',
+                        //   height: '5px',
+                        //   position: 'relative',
+                        // }}
                       />
                     </div>
 
                     {/* 饱和度 */}
                     <div className="Slider-table">
                       <p>饱和度</p>
-                      {/* <div
+                      <div
                         className="w-color-alpha w-color-alpha-horizontal w-color-saturation SliderHue"
                         style={{
                           '--alpha-background-color': '#fff',
@@ -194,30 +177,13 @@ export default function LeftCustomization({ part }: { part: number }) {
                             ></div>
                           </div>
                         </div>
-                      </div> */}
-
-                      <ShadeSlider
-                        className="SliderHue"
-                        style={{ height: '5px', borderRadius: '10px' }}
-                        hsva={hsva}
-                        onChange={(newShade) => {
-                          console.log(newShade);
-                          setHsva({ ...hsva, ...newShade });
-                          console.log(hsva);
-                        }}
-                      />
-
-                      {/* <Slider
-                        color={color}
-                        className="SliderHue"
-                        style={{ height: '5px', borderRadius: '10px' }}
-                      /> */}
+                      </div>
                     </div>
 
                     {/* 明度 */}
                     <div className="Slider-table">
                       <p>明度</p>
-                      {/* <div
+                      <div
                         className="w-color-alpha w-color-alpha-horizontal w-color-saturation SliderHue"
                         style={{
                           '--alpha-background-color': '#fff',
@@ -269,18 +235,7 @@ export default function LeftCustomization({ part }: { part: number }) {
                             ></div>
                           </div>
                         </div>
-                      </div> */}
-
-                      <ShadeSlider
-                        className="SliderHue"
-                        style={{ height: '5px', borderRadius: '10px' }}
-                        hsva={hsva}
-                        onChange={(newShade) => {
-                          console.log(newShade);
-                          setHsva({ ...hsva, ...newShade });
-                          console.log(hsva);
-                        }}
-                      />
+                      </div>
                     </div>
 
                     {/* 金属度 */}
@@ -428,13 +383,7 @@ export default function LeftCustomization({ part }: { part: number }) {
                 <img id="screenshot-img" alt="" />
                 <p>长按图片可保存并分享</p>
               </div>
-              <div
-                className="camera"
-                style={{ marginBottom: '4rem' }}
-                onClick={() => {
-                  eventBus.emit('ScreenshotManager:screenshot');
-                }}
-              >
+              <div className="camera" style={{ marginBottom: '4rem' }}>
                 <img src="/icon/photo.webp" alt="拍照" style={{ width: '2.4rem' }} />
               </div>
             </div>

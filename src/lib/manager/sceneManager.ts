@@ -14,7 +14,7 @@ import { ModelManager } from './modelManager';
 import { MaterialManager } from './materialManager';
 import { ReflectManager } from './reflectManager';
 import { EnvironmentManager } from './environManager';
-import { PosterGenerator } from './posterGenerator';
+import { ScreenshotManager } from './screenshotManager';
 import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
 import { SpringCamera, CameraController } from './cameraManager';
 import { CarMoveManager } from './carMoveManager';
@@ -22,13 +22,13 @@ import { sceneConfig } from './constantsConfig';
 import { isSupportMSAA } from '@/utils/index';
 import { MipBlurPass } from '@/classes/MipBlurPass';
 
+import { eventBus } from '@/utils/eventBus';
 import { CacheKey } from '@/types/index';
 
 export enum EnvMaps {
   t_env_night = 't_env_night',
   t_env_light = 't_env_light',
 }
-
 export interface ModelMeshData {
   meshes: THREE.Mesh[];
   materials: Record<string, THREE.MeshStandardMaterial | THREE.ShaderMaterial>;
@@ -77,8 +77,8 @@ export class SceneManager {
     t_env_light: null,
   };
 
-  // 海报generator
-  public posterGenerator: PosterGenerator | null = null;
+  // 海报 + 截屏generator
+  public screenshotManager: ScreenshotManager | null = null;
   // 环境贴图管理
   private envManager: EnvironmentManager | null = null;
 
@@ -96,7 +96,10 @@ export class SceneManager {
 
   // timer
   public timer: THREE.Timer;
-  public globalUniforms: Record<string, THREE.IUniform> = { u_time: { value: 0 } };
+  public globalUniforms: Record<string, THREE.IUniform> = {
+    u_time: { value: 0 },
+    u_speedTime: { value: 0 },
+  };
 
   // 动画帧 ID（用于清理）
   private _animationFrameId: number | null = null;
@@ -154,6 +157,9 @@ export class SceneManager {
 
     this.modelManager = ModelManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
+
+    // eventBus
+    this.setupBusListeners();
   }
 
   public static getInstance(container?: HTMLCanvasElement): SceneManager {
@@ -264,6 +270,8 @@ export class SceneManager {
       };
 
       await this.materialManager.initEnvironment('t_env_night');
+
+      this.createScene();
     }
   }
 
@@ -302,7 +310,6 @@ export class SceneManager {
     this.scene.add(carModelCache);
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
     carMeshData && this.materialManager.initCarMaterial(carMeshData);
-    console.log('carMeshData', this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup);
 
     // lightbar
     const lightbarModelCache = this.modelManager.getCache(
@@ -333,7 +340,6 @@ export class SceneManager {
           item.transparent = true;
           item.needsUpdate = true;
           if (item.map) {
-            // 加空判断更安全
             item.map.anisotropy = 4;
           }
         }
@@ -347,11 +353,15 @@ export class SceneManager {
     const sm_curvatureMeshData = sm_curvatureModelCache?.userData?.meshData as ModelMeshData;
     // sm_curvature -> 曲率
     const sm_curvatureMesh = sm_curvatureMeshData.meshes.find((item) => item.name === '曲率');
-    // sm_curvatureMeshData.materials > m_curvature
+
+    // m.name == "曲率" && (m.material = NO,
+    // _.materials.m_curvature = m.material,
+    // m.layers.enable(Ae.LAYER_CAPTURE))
     sm_curvatureMesh &&
-      (sm_curvatureMeshData.materials.m_curvature =
+      ((sm_curvatureMeshData.materials as any).m_curvature =
         this.materialManager.initCurvatureMaterial(sm_curvatureMesh));
     sm_curvatureMesh!.layers.enable(sceneConfig.LAYER_CAPTURE);
+
     Object.values(sm_curvatureMeshData.materials).forEach((item) => {
       item.transparent = true;
       item.needsUpdate = true;
@@ -385,108 +395,112 @@ export class SceneManager {
   }
 
   public createScene(): void {
-    // this.posterGenerator = new PosterGenerator(this.renderer);
-    // this.posterGenerator?.enabled = false;
-    this.scene.background = new THREE.Color(0, 0, 0);
+    this.screenshotManager = new ScreenshotManager(this.renderer, this.scene, this.camera);
+
+    // this.screenshotManager.show(0.5);
+    // this.screenshotManager.screenshot();
+    // this.screenshotManager.enabled = false; 不需要
+
+    // this.scene.background = new THREE.Color(0, 0, 0);
 
     // 反射
-    const planeGeo = new THREE.PlaneGeometry(10, 10);
-    const planeMat = new THREE.MeshStandardMaterial({
-      color: 0xaaaaaa,
-      side: THREE.DoubleSide,
-    });
-    const reflectPlane = new THREE.Mesh(planeGeo, planeMat);
-    reflectPlane.rotation.x = -Math.PI / 2; // 平放作为地面
-    this.scene.add(reflectPlane);
+    // const planeGeo = new THREE.PlaneGeometry(10, 10);
+    // const planeMat = new THREE.MeshStandardMaterial({
+    //   color: 0xaaaaaa,
+    //   side: THREE.DoubleSide,
+    // });
+    // const reflectPlane = new THREE.Mesh(planeGeo, planeMat);
+    // reflectPlane.rotation.x = -Math.PI / 2; // 平放作为地面
+    // this.scene.add(reflectPlane);
 
-    this.reflectManager = new ReflectManager(
-      this.camera,
-      this.renderer,
-      this.scene,
-      reflectPlane,
-      new THREE.Vector2(1024, 1024),
-      29,
-      0
-    );
-    sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
-    sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
+    // this.reflectManager = new ReflectManager(
+    //   this.camera,
+    //   this.renderer,
+    //   this.scene,
+    //   reflectPlane,
+    //   new THREE.Vector2(1024, 1024),
+    //   29,
+    //   0
+    // );
+    // sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
+    // sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
 
-    // sm_startroom 设置反射
-    const sm_startroomModelCache = this.modelManager.getCache(
-      'sm_startroom.raw' as CacheKey
-    ) as ModelGroup;
-    sm_startroomModelCache!.traverse((item) => {
-      console.log(item.name);
-      if (item.name === 'ReflecFloor' || item.name === 'Floor') {
-        this.materialManager.createReflectMaterial(item as THREE.Mesh);
-      }
-    });
+    // // sm_startroom 设置反射
+    // const sm_startroomModelCache = this.modelManager.getCache(
+    //   'sm_startroom.raw' as CacheKey
+    // ) as ModelGroup;
+    // sm_startroomModelCache!.traverse((item) => {
+    //   console.log(item.name);
+    //   if (item.name === 'ReflecFloor' || item.name === 'Floor') {
+    //     this.materialManager.createReflectMaterial(item as THREE.Mesh);
+    //   }
+    // });
 
-    // 创建环境贴图管理器
-    this.envManager = new EnvironmentManager(
-      this.scene,
-      this.envMaps.t_env_night as THREE.Texture,
-      this.envMaps.t_env_light as THREE.Texture
-    );
-    // 设置 起始房间 发光材质设置
-    // g = r.addNode(new qO(l))
-    this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
+    // // 创建环境贴图管理器
+    // this.envManager = new EnvironmentManager(
+    //   this.scene,
+    //   this.envMaps.t_env_night as THREE.Texture,
+    //   this.envMaps.t_env_light as THREE.Texture
+    // );
+    // // 设置 起始房间 发光材质设置
+    // // g = r.addNode(new qO(l))
+    // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
 
-    const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    // const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
 
-    this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
-    // _.probeBoxMin.set(-3, -.1, -1.5),
-    this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
-    this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
+    // this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
+    // // _.probeBoxMin.set(-3, -.1, -1.5),
+    // this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
+    // this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
 
-    this.materialManager.initCarLightMaterial(car);
+    // this.materialManager.initCarLightMaterial(car);
 
-    this.springCamera = new SpringCamera({
-      springLength: 11,
-      rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
-      fov: 33.4,
-      lookAt: new THREE.Vector3(0, 0.8, 0),
-    });
+    // this.springCamera = new SpringCamera({
+    //   springLength: 11,
+    //   rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
+    //   fov: 33.4,
+    //   lookAt: new THREE.Vector3(0, 0.8, 0),
+    // });
 
-    this.cameraController = new CameraController(this.springCamera, this.renderer.domElement);
+    // this.cameraController = new CameraController(this.springCamera, this.renderer.domElement);
 
-    /**
-     * 点击绑定事件
-     */
-    // xxxx  JO
+    // /**
+    //  * 点击绑定事件
+    //  */
+    // // xxxx  JO
 
-    // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-    const carMoveManager = new CarMoveManager(car, this.cameraController);
-    this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
+    // // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
+    // const carMoveManager = new CarMoveManager(car, this.cameraController);
+    // this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
 
-    // 找到 3D 模型里名字 = "WeiYi" 的子物体
-    this.modelManager.initWeiyiModel();
-    // sm_car_lightbar 灯光控制
-    this.modelManager.initLightbarModel();
-    // sm_size
-    this.modelManager.initSizeModel();
-    // sm_curvature
-    this.modelManager.initCurvatureModel();
-    // sm_windspeed
-    this.modelManager.initWindspeedModel();
-    // sm_linecar
-    this.modelManager.initLinecarModel();
-    // sm_carradar -> m_radarPoints
-    this.modelManager.initCarRadarPointsModel();
-    // sm_carradar
-    this.modelManager.initCarradarModel();
-    // sm_simpleCar
-    this.modelManager.initSimpleCarModel();
+    // // 找到 3D 模型里名字 = "WeiYi" 的子物体
+    // this.modelManager.initWeiyiModel();
+    // // sm_car_lightbar 灯光控制
+    // this.modelManager.initLightbarModel();
+    // // sm_size
+    // this.modelManager.initSizeModel();
+    // // sm_curvature
+    // this.modelManager.initCurvatureModel();
+    // // sm_windspeed
+    // this.modelManager.initWindspeedModel();
+    // // sm_linecar
+    // this.modelManager.initLinecarModel();
+    // // sm_carradar -> m_radarPoints
+    // this.modelManager.initCarRadarPointsModel();
+    // // sm_carradar
+    // this.modelManager.initCarradarModel();
+    // // sm_simpleCar
+    // this.modelManager.initSimpleCarModel();
 
-    const bloom = new BloomEffect({
-      blendFunction: THREE.AdditiveBlending,
-      luminanceThreshold: 0,
-      luminanceSmoothing: 1.6,
-      mipmapBlur: true,
-      // intensity: 1.0,
-    });
+    // const bloom = new BloomEffect({
+    //   blendFunction: THREE.AdditiveBlending,
+    //   luminanceThreshold: 0,
+    //   luminanceSmoothing: 1.6,
+    //   mipmapBlur: true,
+    //   // intensity: 1.0,
+    // });
 
-    this.initPostProcessing();
+    // this.initPostProcessing();
 
     // this._envController = h  // this.envManager
     // this._springCtr = U  // this.cameraController
@@ -531,17 +545,32 @@ export class SceneManager {
     if (this._animationFrameId) return;
 
     const render = () => {
+      this.controls.update();
       this._animationFrameId = requestAnimationFrame(render);
 
-      this._updateReflection();
+      // this._updateReflection();
 
+      //   update(r) {
+      //     if (Ae.u_speedTime.value += r * Ae.u_speedUpBackgroundValue.value * .2,
+      //     Ae.u_time.value += r,
+      //     Ae.sm_car) {
+      //         const s = Ae.sm_car.meshData.materials.Car_body;
+      //         s.metalness = Ae.u_carMetalness.value,
+      //         s.roughness = Ae.u_carRoughness.value,
+      //         s.color.copy(Ae.u_carColor.value)
+      //     }
+      // }
       this.timer.update();
+      const deltaTime = this.timer.getDelta();
+      this.globalUniforms.u_speedTime.value +=
+        deltaTime * sceneConfig.u_speedUpBackgroundValue.value * 0.2;
       this.globalUniforms.u_time.value = this.timer.getElapsed();
-
-      this.controls.update();
+      this.materialManager.updateSmCarCarBody();
 
       // this.materialManager.updateEnvMap(new THREE.Vector3(0, 0, 0));
       this.composer?.render();
+
+      this.screenshotManager && this.screenshotManager.render();
     };
 
     render();
@@ -591,6 +620,30 @@ export class SceneManager {
     this.composer?.setSize(width, height);
   }
 
+  private setupBusListeners(): void {
+    // 监听模块切换
+    eventBus.on('UI-RightContent:changeModule', ({ module: module }) => {
+      console.log('UI-RightContent:changeModule', module);
+      switch (module) {
+        case 0:
+          break;
+        case 4:
+          this.screenshotManager && this.screenshotManager.show(0.5);
+          break;
+      }
+    });
+
+    // 监听隐藏指令
+    eventBus.on('ScreenshotManager:hide', (data) => {
+      this.screenshotManager && this.screenshotManager.hide(data?.duration ?? 0.5);
+    });
+
+    // 监听截图指令
+    eventBus.on('ScreenshotManager:screenshot', async () => {
+      this.screenshotManager && this.screenshotManager.screenshot();
+    });
+  }
+
   public dispose(): void {
     this.stopRender();
     if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
@@ -614,5 +667,9 @@ export class SceneManager {
     this.scene.clear();
     this.camera.clear();
     SceneManager.instance = null;
+
+    eventBus.off('ScreenshotManager:show');
+    eventBus.off('ScreenshotManager:hide');
+    eventBus.off('ScreenshotManager:screenshot');
   }
 }

@@ -322,6 +322,13 @@ class SceneConfig {
       return baseUrl + currentColorIndex;
     }
   }
+
+  // get
+  public get<K extends keyof SceneConfig>(param: K): SceneConfig[K] | undefined {
+    if (this[param] !== undefined) {
+      return this[param];
+    }
+  }
 }
 
 export type TextureUniformKey =

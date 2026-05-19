@@ -19,7 +19,7 @@ export class CarMoveManager {
   private _targetVelocity = 0;
   private _currentVelocity = 0;
   private _lerpStrength = 1;
-  private _springCameraOB: any; // 你的弹簧相机控制器
+  private _springCameraOB: any; // 弹簧相机控制器
 
   // 传入：车轮根节点、弹簧相机实例
   constructor(modelRoot: THREE.Object3D, springCameraOB: any) {

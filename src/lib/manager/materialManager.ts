@@ -77,7 +77,7 @@ export class MaterialManager {
       type: TextureType.png,
       config: {
         flipY: false,
-        colorSpace: THREE.SRGBColorSpace,
+        colorSpace: THREE.LinearSRGBColorSpace,
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
         anisotropy: 4,
@@ -89,7 +89,7 @@ export class MaterialManager {
       type: TextureType.jpg,
       config: {
         flipY: false,
-        colorSpace: THREE.SRGBColorSpace,
+        colorSpace: THREE.LinearSRGBColorSpace,
         minFilter: THREE.NearestFilter,
         magFilter: THREE.NearestFilter,
       },
@@ -98,7 +98,7 @@ export class MaterialManager {
       name: 't_startroom_ao.raw',
       priority: 1,
       type: TextureType.jpg,
-      config: { flipY: false, colorSpace: THREE.SRGBColorSpace },
+      config: { flipY: false, colorSpace: THREE.LinearSRGBColorSpace },
     },
     {
       name: 't_startroom_light.raw',
@@ -112,7 +112,7 @@ export class MaterialManager {
       type: TextureType.webp,
       config: {
         flipY: false,
-        colorSpace: THREE.SRGBColorSpace,
+        colorSpace: THREE.LinearSRGBColorSpace,
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
       },
@@ -123,7 +123,7 @@ export class MaterialManager {
       type: TextureType.jpg,
       config: {
         flipY: false,
-        colorSpace: THREE.SRGBColorSpace,
+        colorSpace: THREE.LinearSRGBColorSpace,
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
       },
@@ -224,6 +224,8 @@ export class MaterialManager {
     carlightValue: 0,
     carlightColor: new THREE.Color(0x000000),
   };
+
+  public smcar_carbody: THREE.MeshStandardMaterial | null = null;
 
   private constructor() {
     this.textureConfig.sort((a, b) => a.priority - b.priority);
@@ -335,7 +337,7 @@ export class MaterialManager {
             url,
             (texture) => {
               // texture.flipY = false;
-              // texture.colorSpace = THREE.LinearSRGBColorSpace;
+              texture.colorSpace = THREE.LinearSRGBColorSpace;
               // texture.mapping = THREE.EquirectangularReflectionMapping;
               // texture.type = THREE.HalfFloatType;
 
@@ -350,7 +352,7 @@ export class MaterialManager {
               //   }
               // }
 
-              // texture.needsUpdate = true;
+              texture.needsUpdate = true;
 
               // if (textureObj[name]) {
               //   const rt = this.pmremGenerator.fromEquirectangular(texture);
@@ -584,6 +586,8 @@ export class MaterialManager {
     meshData.materials.Car_body.map = this.ut_white;
     meshData.materials.Car_body.needsUpdate = true;
 
+    this.smcar_carbody = meshData.materials.Car_body;
+
     meshData.materials.M_logo.map!.anisotropy = 8;
 
     const car_window_material = meshData.materials.Car_window;
@@ -788,6 +792,13 @@ export class MaterialManager {
     t.fragmentShader = n;
   }
 
+  public updateSmCarCarBody() {
+    if (!this.smcar_carbody) return;
+    this.smcar_carbody.metalness = sceneConfig.u_carMetalness.value;
+    this.smcar_carbody.roughness = sceneConfig.u_carRoughness.value;
+    this.smcar_carbody.color.copy(sceneConfig.u_carColor.value);
+  }
+
   // 初始化lightbar材质
   public initLightbarMaterial(meshData: ModelMeshData): void {
     // 灯条网格设置反射层级
@@ -814,7 +825,6 @@ export class MaterialManager {
     let fragmentShader = t.fragmentShader;
     let vertexShader = t.vertexShader;
 
-    // 在公共代码区插入自定义变量
     vertexShader = vertexShader.replace(
       '#include <common>',
       `
@@ -885,12 +895,16 @@ export class MaterialManager {
 
   // sm_speedup
   public initSpeedupMaterial(meshData: ModelMeshData): void {
+    if (!this.sceneManager) {
+      console.warn('this.sceneManager!.u_speedTime', this.sceneManager);
+    }
+
     meshData.meshes.forEach((item: THREE.Mesh) => {
       // 统一赋值加速特效材质
       item.material = new THREE.ShaderMaterial({
         // 着色器统一变量（外部可动态传入的参数）
         uniforms: {
-          time: sceneConfig.u_speedTime, // 时间：驱动流动动画
+          time: this.sceneManager!.globalUniforms.u_speedTime, // 时间：驱动流动动画
           vSpeed: sceneConfig.u_speedUpBackgroundValue, // 车辆速度：控制光效强度
           vPoliceColorChange: sceneConfig.u_policeColorChange, // 警灯模式开关：0=普通流光 1=警灯
         },
@@ -965,15 +979,15 @@ export class MaterialManager {
         depthWrite: false, // 关闭深度写入：防止遮挡其他物体
         transparent: true, // 开启透明：线条外区域透明
       });
-      (item.layers.enable(sceneConfig.LAYER_CAPTURE),
-        item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT));
+      item.layers.enable(sceneConfig.LAYER_CAPTURE);
+      item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
     });
   }
 
   // sm_curvature -> 曲率
   public initCurvatureMaterial(meshData: THREE.Mesh): THREE.ShaderMaterial {
     const shaderMaterial = new THREE.ShaderMaterial({
-      name: 'm_curvature', // 材质名称（方便调试/查找）
+      name: 'm_curvature', // 材质名称
 
       // 外部可动态修改的参数（Three.js 传递给 shader）
       uniforms: {
@@ -1027,7 +1041,7 @@ export class MaterialManager {
     });
 
     meshData.material = shaderMaterial;
-    return meshData.material;
+    return shaderMaterial;
   }
 
   // sm_windspeed -> 风动线
@@ -1129,7 +1143,6 @@ export class MaterialManager {
         // 材质名称：流动线/流动车线
         name: 'm_linecar',
 
-        // 着色器统一变量（JS 传递给 shader 的数据）
         uniforms: {
           // 时间：驱动流动动画
           time: this._globalUniforms.u_time.value,

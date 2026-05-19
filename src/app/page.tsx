@@ -8,12 +8,13 @@ import LeftCustomization from '@/components/LeftCustomization';
 import RightContent from '@/components/RightContent';
 import RenderContext from '@/components/RenderContent';
 import LoadingProgress from '@/components/LoadingProgress';
+import ScreenShot from '@/components/ScreenShot';
 
-import { ModelManager } from '@/lib/manager/modelManager';
+import { eventBus } from '@/utils/eventBus';
 export default function Page() {
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const [part, setPart] = useState(0);
+  const [part, setPart] = useState(4);
 
   useEffect(() => {
     // const manager = ModelManager.getInstance();
@@ -42,6 +43,8 @@ export default function Page() {
       <LeftCustomization part={part} />
       <RightContent part={part} setPart={setPart} />
       <Bottom part={part} />
+
+      <ScreenShot />
     </>
   );
 }

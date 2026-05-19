@@ -1,6 +1,7 @@
 'use client';
 
 import { useTap } from '@/hook/index';
+import { eventBus } from '@/utils/eventBus';
 export default function RightContent({
   part,
   setPart,
@@ -20,6 +21,7 @@ export default function RightContent({
 
   const tap = useTap((e: Part) => {
     setPart(e.partId);
+    eventBus.emit('UI-RightContent:changeModule', { module: e.partId });
   });
 
   return (

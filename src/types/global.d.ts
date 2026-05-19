@@ -27,4 +27,11 @@ declare module 'react' {
   }
 }
 
+declare module 'three' {
+  interface Object3D {
+    /** 引擎扩展：局部 Uniforms（同一个材质不同实例的独立参数） */
+    localUniforms: Record<string, any>;
+  }
+}
+
 export {};
