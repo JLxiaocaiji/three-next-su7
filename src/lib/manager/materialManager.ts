@@ -89,7 +89,7 @@ export class MaterialManager {
       type: TextureType.jpg,
       config: {
         flipY: false,
-        colorSpace: THREE.LinearSRGBColorSpace,
+        colorSpace: THREE.NoColorSpace,
         minFilter: THREE.NearestFilter,
         magFilter: THREE.NearestFilter,
       },
@@ -98,7 +98,7 @@ export class MaterialManager {
       name: 't_startroom_ao.raw',
       priority: 1,
       type: TextureType.jpg,
-      config: { flipY: false, colorSpace: THREE.LinearSRGBColorSpace },
+      config: { flipY: false, colorSpace: THREE.NoColorSpace },
     },
     {
       name: 't_startroom_light.raw',
@@ -112,7 +112,7 @@ export class MaterialManager {
       type: TextureType.webp,
       config: {
         flipY: false,
-        colorSpace: THREE.LinearSRGBColorSpace,
+        colorSpace: THREE.NoColorSpace,
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
       },
@@ -123,7 +123,7 @@ export class MaterialManager {
       type: TextureType.jpg,
       config: {
         flipY: false,
-        colorSpace: THREE.LinearSRGBColorSpace,
+        colorSpace: THREE.NoColorSpace,
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
       },
@@ -355,8 +355,9 @@ export class MaterialManager {
               texture.needsUpdate = true;
 
               // if (textureObj[name]) {
+              //   // PBR 专用的辐射贴图
               //   const rt = this.pmremGenerator.fromEquirectangular(texture);
-
+              //   // 存储生成后的纹理，类型是 THREE.Texture，mapping 是 CubeUVReflectionMapping
               //   sceneConfig[textureObj[name]].value = rt.texture;
               //   this.textureCache.set(name, rt.texture);
 
@@ -383,13 +384,13 @@ export class MaterialManager {
           this.loader.load(
             url,
             (texture) => {
-              config.flipY && (texture.flipY = config.flipY);
-              config.colorSpace && (texture.colorSpace = config.colorSpace);
-              config.wrapS && (texture.wrapS = config.wrapS);
-              config.wrapT && (texture.wrapT = config.wrapT);
-              config.anisotropy && (texture.anisotropy = config.anisotropy);
-              config.minFilter && (texture.minFilter = config.minFilter);
-              config.magFilter && (texture.magFilter = config.magFilter);
+              if (config.flipY !== undefined) texture.flipY = config.flipY;
+              if (config.colorSpace !== undefined) texture.colorSpace = config.colorSpace;
+              if (config.wrapS !== undefined) texture.wrapS = config.wrapS;
+              if (config.wrapT !== undefined) texture.wrapT = config.wrapT;
+              if (config.anisotropy !== undefined) texture.anisotropy = config.anisotropy;
+              if (config.minFilter !== undefined) texture.minFilter = config.minFilter;
+              if (config.magFilter !== undefined) texture.magFilter = config.magFilter;
               texture.needsUpdate = true;
 
               if (textureObj[name]) {
@@ -567,19 +568,27 @@ export class MaterialManager {
   // 初始化car材质
   public initCarMaterial(meshData: ModelMeshData): void {
     if (!meshData?.meshes) return;
+
+    const mesh = meshData.meshes;
+    console.log(mesh);
+
     Object.values(meshData.meshes).forEach((item: THREE.Mesh) => {
       item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
     });
 
+    const aoTexture = sceneConfig.ut_car_body_ao.value;
+    aoTexture!.channel = 1;
+
     Object.values(meshData.materials).forEach((item: THREE.MeshStandardMaterial) => {
-      item.aoMap = sceneConfig.ut_car_body_ao.value; // AO贴图 黑色
-      item.needsUpdate = true;
+      item.aoMap = aoTexture;
 
       if (item instanceof THREE.MeshStandardMaterial) {
         item.onBeforeCompile = (shader) => {
           this.changeCarMaterialShader(shader);
         };
       }
+
+      item.needsUpdate = true;
     });
 
     // 汽车车身材质：主贴图赋值为白色纹理
@@ -627,45 +636,45 @@ export class MaterialManager {
       #if (!defined(USE_UV))
         #define USE_UV
       #endif
-    `
+      `
     );
 
     r = r.replace(
       '#include <fog_vertex>',
       `
-        #include <fog_vertex>
-        
-        // 世界空间法线
-        vec3 worldNormal = normalize(vec3(vec4(normal, 0.0) * modelMatrix));
-        // 相机 -> 顶点 的方向
-        vec3 cameraToVertex = normalize(worldPosition.xyz - cameraPosition);
-        // 计算反射向量（reflect I, N → 入射光, 法线）
-        reflectVec = reflect(cameraToVertex, worldNormal);
-        // 输出世界坐标
-        vPosW = worldPosition.xyz;
+      #include <fog_vertex>
+      
+      // 世界空间法线
+      vec3 worldNormal = normalize(vec3(vec4(normal, 0.0) * modelMatrix));
+      // 相机 -> 顶点 的方向
+      vec3 cameraToVertex = normalize(worldPosition.xyz - cameraPosition);
+      // 计算反射向量（reflect I, N → 入射光, 法线）
+      reflectVec = reflect(cameraToVertex, worldNormal);
+      // 输出世界坐标
+      vPosW = worldPosition.xyz;
       `
     );
 
     n = n.replace(
       '#include <common>',
       `#include <common>
-        // 接收顶点着色器传过来的数据
-        varying vec3 reflectVec;
-        varying vec3 vPosW;
-        
-        // 自定义 Uniform（从 Ae 全局配置传入）
-        uniform samplerCube cubeCaptureReflectMap;  // 高清反射 Cubemap
-        uniform samplerCube blurCaptureReflectMap;  // 模糊反射 Cubemap
-        uniform float vEnvMapIntensity;             // 环境光强度
-        uniform float vDiscardOpacity;              //  discard 裁切透明度
-        
-        // 外部引入的 Shader 片段
-        ${noise2d}
-        
-        // 强制开启 UV
-        #if (!defined(USE_UV))
-          #define USE_UV
-        #endif
+      // 接收顶点着色器传过来的数据
+      varying vec3 reflectVec;
+      varying vec3 vPosW;
+      
+      // 自定义 Uniform（从 Ae 全局配置传入）
+      uniform samplerCube cubeCaptureReflectMap;  // 高清反射 Cubemap
+      uniform samplerCube blurCaptureReflectMap;  // 模糊反射 Cubemap
+      uniform float vEnvMapIntensity;             // 环境光强度
+      uniform float vDiscardOpacity;              //  discard 裁切透明度
+      
+      // 外部引入的 Shader 片段
+      ${noise2d}
+      
+      // 强制开启 UV
+      #if (!defined(USE_UV))
+        #define USE_UV
+      #endif
       `
     );
 
@@ -673,13 +682,13 @@ export class MaterialManager {
     n = n.replace(
       '#include <envmap_physical_pars_fragment>',
       `
-    #if defined(USE_ENVMAP)
+      #if defined(USE_ENVMAP)
 
-    // 盒子投影（Box Projection）：环境映射跟随物体空间，不飘
-    #if defined(USE_BOX_PROJECTION)
-    uniform vec4 probePos;
-    uniform vec3 probeBoxMin;
-    uniform vec3 probeBoxMax;
+      // 盒子投影（Box Projection）：环境映射跟随物体空间，不飘
+      #if defined(USE_BOX_PROJECTION)
+      uniform vec4 probePos;
+      uniform vec3 probeBoxMin;
+      uniform vec3 probeBoxMax;
 
       vec3 boxProjection(vec3 nrdir, vec3 worldPos, vec3 probePos, vec3 boxMin, vec3 boxMax) {
         vec3 tbot = boxMin - worldPos;
@@ -743,7 +752,7 @@ export class MaterialManager {
       }
 
       #endif
-    `
+      `
     );
 
     // 动态 discard 裁切：根据 X 轴位置裁剪汽车
@@ -761,7 +770,7 @@ export class MaterialManager {
       
       // 原始裁剪逻辑
       #include <clipping_planes_fragment>
-    `
+      `
     );
 
     // 裁切边缘发光效果：蓝色高光描边
@@ -778,7 +787,7 @@ export class MaterialManager {
         mix(gl_FragColor.rgb, vec3(0.5, 0.9, 1.0), vec3(discardLightMask)),
         gl_FragColor.a
       );
-    `
+      `
     );
 
     // 给材质注入 Uniform（从全局配置 sceneConfig 来）
@@ -861,7 +870,7 @@ export class MaterialManager {
       `
         #ifdef USE_EMISSIVEMAP
           // 采样自发光贴图颜色
-          vec4 emissiveColor = texture2D(emissiveMap, vUv);
+          vec4 emissiveColor = texture(emissiveMap, vUv);
 
           // 计算流动扫描动画：
           // cos(uv2.x * 密度 + 时间 * 速度) → 生成横向波浪
@@ -973,7 +982,7 @@ export class MaterialManager {
 
             // 关闭色调映射与编码（保持自发光高亮）
             // #include <tonemapping_fragment>
-            // #include <encodings_fragment>
+            // #include <colorspace_fragment>
           }
         `,
         depthWrite: false, // 关闭深度写入：防止遮挡其他物体
@@ -1022,7 +1031,7 @@ export class MaterialManager {
           // 采样线条贴图：提取线条形状
           // 从遮罩贴图中读取红色通道（黑白图 r=g=b）
           // 白色=1（显示发光），黑色=0（透明）
-          float mask = texture2D(tSaLine, l_uv).r;
+          float mask = texture(tSaLine, l_uv).r;
 
           // 边缘衰减：让线条在 X 方向右侧淡出
           // 1 - smoothstep → 左边亮，右边渐暗
@@ -1453,127 +1462,6 @@ export class MaterialManager {
 
     this.materials.set(key, mat);
     return mat;
-  }
-
-  // 创建反射材质
-  public createReflectMaterial(mesh: THREE.Mesh) {
-    if (!mesh) {
-      console.warn('ReflectMaterial: no mesh parameter');
-      return;
-    }
-
-    // 2. 定义【反射材质基础Uniform变量】
-    const baseUniforms: THREE.ShaderMaterial['uniforms'] = {
-      // 基础PBR材质属性
-      color: { value: new THREE.Color() },
-      map: sceneConfig.ut_floorMap,
-      opacity: { value: 1 },
-      // 粗糙度/金属度
-      roughness: { value: 1 },
-      roughnessMap: { value: null },
-      metalness: { value: 1 },
-      metalnessMap: { value: null },
-
-      // 环境光遮蔽 + 光照贴图
-      aoMap: { value: null },
-      lightMap: { value: null },
-      lightMapColor: sceneConfig.u_floorLightMapColor,
-      lightMapIntensity: { value: 1 },
-
-      // 自发光
-      emissive: { value: new THREE.Color() },
-      emissiveMap: { value: null },
-
-      // 法线贴图
-      normalMap: { value: null },
-      distortionScale: { value: 0 },
-
-      // 项目自定义反射/地面参数
-      u_lightIntensity: sceneConfig.u_floorLightMapIntensity,
-      u_reflectIntensity: sceneConfig.u_floorReflectIntensity,
-      u_floor_typeSwitch: sceneConfig.u_floor_typeSwitch,
-      ut_street: sceneConfig.ut_street,
-      u_floorUVOffset: sceneConfig.u_floorUVOffset,
-
-      // 继承全局雾、灯光、反射配置
-      fog: ShaderUniformLib.fog, // 继承全局雾配置
-
-      lights: ShaderUniformLib.lights, // 继承全局灯光配置
-      ...sceneConfig.u_reflect,
-    } as unknown as THREE.ShaderMaterial['uniforms'];
-
-    // 定义【着色器宏定义】(控制贴图开关)
-    const shaderDefines: Record<string, string | boolean> = {
-      USE_MAP: '',
-      USE_ROUGHNESS_MAP: '',
-    };
-
-    // 获取网格的原始材质
-    const originalMaterial = mesh.material as THREE.MeshPhysicalMaterial;
-
-    // 若存在原始标准材质，继承其属性到Shader材质
-    if (originalMaterial) {
-      // 继承基础颜色 + 透明度
-      baseUniforms.color.value = originalMaterial.color;
-      shaderDefines.USE_MAP = ''; // 启用纹理
-      baseUniforms.opacity.value = originalMaterial.opacity;
-
-      // 继承 粗糙度贴图
-      if (originalMaterial.roughnessMap) {
-        baseUniforms.roughnessMap.value = originalMaterial.roughnessMap;
-        shaderDefines.USE_ROUGHNESS_MAP = '';
-      }
-
-      // 继承 金属度贴图
-      baseUniforms.metalness = { value: originalMaterial.metalness };
-      if (originalMaterial.metalnessMap) {
-        baseUniforms.metalnessMap.value = originalMaterial.metalnessMap;
-        shaderDefines.USE_METALNESS_MAP = '';
-      }
-
-      // 继承 自发光属性
-      baseUniforms.emissive = { value: originalMaterial.emissive };
-      if (originalMaterial.emissiveMap) {
-        baseUniforms.emissiveMap.value = originalMaterial.emissiveMap;
-        shaderDefines.USE_EMISSIVE_MAP = '';
-      }
-
-      // 继承 AO贴图
-      if (originalMaterial.aoMap) {
-        baseUniforms.aoMap.value = originalMaterial.aoMap;
-        shaderDefines.USE_AO_MAP = '';
-      }
-
-      // 继承 光照贴图
-      baseUniforms.lightMapIntensity = { value: originalMaterial.lightMapIntensity };
-      if (originalMaterial.lightMap) {
-        baseUniforms.lightMap.value = originalMaterial.lightMap;
-        shaderDefines.USE_LIGHT_MAP = '';
-      }
-
-      // 继承 法线贴图 (设置各向异性=4)
-      if (originalMaterial.normalMap) {
-        originalMaterial.normalMap.anisotropy = 4;
-        baseUniforms.normalMap.value = originalMaterial.normalMap;
-        shaderDefines.USE_NORMAL_MAP = '';
-      }
-
-      // 创建自定义反射Shader材质，替换网格原有材质
-      const reflectShaderMaterial = new THREE.ShaderMaterial({
-        defines: shaderDefines,
-        uniforms: baseUniforms,
-        vertexShader: reflectVertexShader,
-        fragmentShader: reflectFragmentShader,
-      });
-
-      // 材质命名
-      reflectShaderMaterial.name = 'M_Reflect';
-      // 核心：将反射材质赋值给网格
-      mesh.material = reflectShaderMaterial;
-    } else {
-      // 无原始材质时打印日志
-      console.log('ReflectMaterial: err');
-    }
   }
 
   /**

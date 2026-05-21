@@ -12,8 +12,8 @@ import type * as DatGUIType from 'dat.gui';
 
 import { ModelManager } from './modelManager';
 import { MaterialManager } from './materialManager';
-import { ReflectManager } from './reflectManager';
-import { EnvironmentManager } from './environManager';
+import { ReflectManager } from '@/classes/ReflectManager';
+import { EnvironmentManager } from '@/classes/Environment';
 import { ScreenshotManager } from './screenshotManager';
 import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
 import { SpringCamera, CameraController } from './cameraManager';
@@ -323,6 +323,7 @@ export class SceneManager {
     const sm_startroomModelCache = this.modelManager.getCache(
       'sm_startroom.raw' as CacheKey
     ) as ModelGroup;
+    this.scene.add(sm_startroomModelCache);
     const startroomMeshData = sm_startroomModelCache?.userData?.meshData as ModelMeshData;
     startroomMeshData && this.materialManager.initStartroomMaterial(startroomMeshData);
 
@@ -397,54 +398,46 @@ export class SceneManager {
   public createScene(): void {
     this.screenshotManager = new ScreenshotManager(this.renderer, this.scene, this.camera);
 
-    // this.screenshotManager.show(0.5);
-    // this.screenshotManager.screenshot();
-    // this.screenshotManager.enabled = false; 不需要
+    this.scene.background = new THREE.Color(0, 0, 0);
 
-    // this.scene.background = new THREE.Color(0, 0, 0);
+    // sm_startroom -> reflectFloor 设置反射
+    const sm_startroomModelCache = this.modelManager.getCache(
+      'sm_startroom.raw' as CacheKey
+    ) as ModelGroup;
 
-    // 反射
-    // const planeGeo = new THREE.PlaneGeometry(10, 10);
-    // const planeMat = new THREE.MeshStandardMaterial({
-    //   color: 0xaaaaaa,
-    //   side: THREE.DoubleSide,
-    // });
-    // const reflectPlane = new THREE.Mesh(planeGeo, planeMat);
-    // reflectPlane.rotation.x = -Math.PI / 2; // 平放作为地面
-    // this.scene.add(reflectPlane);
+    const reflectFloor = sm_startroomModelCache!.getObjectByName('ReflecFloor') as THREE.Mesh;
 
-    // this.reflectManager = new ReflectManager(
-    //   this.camera,
-    //   this.renderer,
-    //   this.scene,
-    //   reflectPlane,
-    //   new THREE.Vector2(1024, 1024),
-    //   29,
-    //   0
-    // );
+    if (reflectFloor) {
+      this.reflectManager = new ReflectManager(
+        this.camera,
+        this.renderer,
+        this.scene,
+
+        reflectFloor,
+        new THREE.Vector2(1024, 1024),
+        29,
+        0.001
+      );
+    }
+
     // sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
     // sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
 
-    // // sm_startroom 设置反射
-    // const sm_startroomModelCache = this.modelManager.getCache(
-    //   'sm_startroom.raw' as CacheKey
-    // ) as ModelGroup;
-    // sm_startroomModelCache!.traverse((item) => {
-    //   console.log(item.name);
-    //   if (item.name === 'ReflecFloor' || item.name === 'Floor') {
-    //     this.materialManager.createReflectMaterial(item as THREE.Mesh);
-    //   }
-    // });
+    // 创建环境贴图管理器
+    // new YO(Ae.ut_env_night.value,Ae.ut_env_light.value)
+    this.envManager = new EnvironmentManager(
+      this.renderer,
+      this.scene,
+      sceneConfig.ut_env_night.value as THREE.Texture,
+      sceneConfig.ut_env_light.value as THREE.Texture
+    );
 
-    // // 创建环境贴图管理器
-    // this.envManager = new EnvironmentManager(
-    //   this.scene,
-    //   this.envMaps.t_env_night as THREE.Texture,
-    //   this.envMaps.t_env_light as THREE.Texture
-    // );
-    // // 设置 起始房间 发光材质设置
-    // // g = r.addNode(new qO(l))
-    // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
+    this.envManager.setState(2);
+
+    // 设置 起始房间 发光材质设置
+    // l = r.addNode(Ae.sm_startroom)
+    // g = r.addNode(new qO(l))
+    this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
 
     // const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
 
@@ -568,8 +561,15 @@ export class SceneManager {
       this.materialManager.updateSmCarCarBody();
 
       // this.materialManager.updateEnvMap(new THREE.Vector3(0, 0, 0));
+
+      // 反射平面反射渲染
+      this.reflectManager && this.reflectManager.render();
+      // 环境贴图更新
+      this.envManager && this.envManager.update();
+
       this.composer?.render();
 
+      // 4 -> 截图
       this.screenshotManager && this.screenshotManager.render();
     };
 

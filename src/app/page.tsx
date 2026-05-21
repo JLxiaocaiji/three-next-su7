@@ -14,7 +14,7 @@ import { eventBus } from '@/utils/eventBus';
 export default function Page() {
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const [part, setPart] = useState(4);
+  const [part, setPart] = useState(0);
 
   useEffect(() => {
     // const manager = ModelManager.getInstance();

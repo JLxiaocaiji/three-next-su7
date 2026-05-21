@@ -1,5 +1,7 @@
 import { Color, Vector2, Vector3, Matrix4, Texture, WebGLRenderTarget, CubeTexture } from 'three';
 
+type DirectionKeys = 'UNIT_X' | 'UNIT_Y' | 'UNIT_Z' | 'RIGHT' | 'UP' | 'ZERO' | 'ONE' | 'NEG_ONE';
+
 class SceneConfig {
   // 基础配置
   public maxSpeed: number;
@@ -41,7 +43,7 @@ class SceneConfig {
   public ut_gm02_floor_bc: { value: Texture | null };
   public ut_police_Car_body_BC: { value: Texture | null };
   public ut_police_floor_bc: { value: Texture | null };
-  public ut_env_night: { value: Texture | null };
+  public ut_env_night: { value: CubeTexture | null };
   public ut_env_light: { value: Texture | null };
 
   // Shader Uniforms
@@ -61,7 +63,7 @@ class SceneConfig {
 
   // 反射配置
   public u_reflect: {
-    u_reflectTexture: { value: WebGLRenderTarget | null };
+    u_reflectTexture: { value: Texture | null };
     u_reflectMatrix: { value: Matrix4 | null };
   };
 
@@ -77,6 +79,7 @@ class SceneConfig {
   public u_carColor: { value: Color };
   public u_carMetalness: { value: number };
   public u_carRoughness: { value: number };
+  public positionDirction: Record<DirectionKeys, Vector3>;
 
   constructor() {
     // 初始化基础参数
@@ -117,9 +120,13 @@ class SceneConfig {
     this.u_speedUpBackgroundValue = { value: 0 };
     this.u_car_discard = { value: 1 };
     this.u_speedTime = { value: 0 };
-    this.u_floorLightMapIntensity = { value: 0 };
+
+    // 变化值
+    // this.u_floorLightMapIntensity = { value: 0 };
+    this.u_floorLightMapIntensity = { value: 1 };
     this.u_floorLightMapColor = { value: new Color('#000000') };
-    this.u_floorReflectIntensity = { value: 0 };
+    // this.u_floorReflectIntensity = { value: 0.1 };
+    this.u_floorReflectIntensity = { value: 1 };
     this.u_floorUVOffset = { value: new Vector2() };
     this.u_simpleCarCenter1 = { value: new Vector3() };
     this.u_simpleCarCenter2 = { value: new Vector3() };
@@ -258,6 +265,18 @@ class SceneConfig {
     this.u_carColor = { value: this.colors.get('00')!.col.clone() };
     this.u_carMetalness = { value: this.colors.get('00')!.metal || 0 };
     this.u_carRoughness = { value: 0 };
+
+    // 方位
+    this.positionDirction = {
+      UNIT_X: new Vector3(1, 0, 0),
+      UNIT_Y: new Vector3(0, 1, 0),
+      UNIT_Z: new Vector3(0, 0, 1),
+      RIGHT: new Vector3(1, 0, 0),
+      UP: new Vector3(0, 1, 0),
+      ZERO: new Vector3(0, 0, 0),
+      ONE: new Vector3(1, 1, 1),
+      NEG_ONE: new Vector3(-1, -1, -1),
+    };
   }
 
   /**

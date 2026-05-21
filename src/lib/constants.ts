@@ -4200,7 +4200,7 @@ void main() {
 	gl_FragColor = texColor;
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 
 }
 `,
@@ -4263,7 +4263,7 @@ void main() {
 	gl_FragColor = texColor;
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 
 }
 `,
@@ -4298,7 +4298,7 @@ void main() {
 	gl_FragColor.a *= opacity;
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 
 }
 `,
@@ -4495,7 +4495,7 @@ void main() {
 	gl_FragColor = texture2D( tEquirect, sampleUV );
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 
 }
 `,
@@ -4562,7 +4562,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 
@@ -4675,7 +4675,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -4797,7 +4797,7 @@ void main() {
 	#include <envmap_fragment>
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -4903,7 +4903,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -5108,7 +5108,7 @@ void main() {
 	#include <envmap_fragment>
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -5329,7 +5329,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -5461,7 +5461,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
@@ -5532,7 +5532,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 
@@ -5586,7 +5586,7 @@ void main() {
 	gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );
 
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 
 }
@@ -5664,7 +5664,7 @@ void main() {
 
 	#include <output_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 
 }

@@ -19,7 +19,6 @@ export default function ModelPage({
 
   const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
 
