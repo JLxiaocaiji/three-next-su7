@@ -214,6 +214,10 @@ export class MaterialManager {
 
   // 发光材质
   public startroomLightMaterial: THREE.MeshStandardMaterial | null = null;
+
+  private static readonly LIGHT_OFF_COLOR = new THREE.Color('#000000');
+  private static readonly LIGHT_ON_COLOR = new THREE.Color('#ffffff');
+
   // 汽车车灯材质
   public carlight: {
     carlightMaterial: THREE.MeshStandardMaterial | null;
@@ -222,7 +226,7 @@ export class MaterialManager {
   } = {
     carlightMaterial: null,
     carlightValue: 0,
-    carlightColor: new THREE.Color(0x000000),
+    carlightColor: MaterialManager.LIGHT_OFF_COLOR,
   };
 
   public smcar_carbody: THREE.MeshStandardMaterial | null = null;
@@ -570,7 +574,6 @@ export class MaterialManager {
     if (!meshData?.meshes) return;
 
     const mesh = meshData.meshes;
-    console.log(mesh);
 
     Object.values(meshData.meshes).forEach((item: THREE.Mesh) => {
       item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
@@ -1471,7 +1474,6 @@ export class MaterialManager {
   public initStartroomLightMaterial(mesh: ModelGroup): void {
     if (!mesh.userData.meshData) return;
     this.startroomLightMaterial = mesh.userData.meshData.materials.light;
-    console.log('startroomLightMaterial', this.startroomLightMaterial);
     if (!this.startroomLightMaterial) return;
 
     // 设置自发光颜色为 黑色（关闭发光）
@@ -1480,56 +1482,55 @@ export class MaterialManager {
     this.startroomLightMaterial.transparent = true;
     // 关闭深度写入防止闪烁/遮挡BUG
     this.startroomLightMaterial.depthWrite = false;
-
     // 设置初始不透明度
     this.startroomLightMaterial.opacity = 1;
     // 强制材质更新
     this.startroomLightMaterial.needsUpdate = true;
   }
 
-  public getLightEmissiveIntensity() {
+  public getStartroomLightMaterialEmissiveIntensity() {
     return this.startroomLightMaterial!.emissiveIntensity;
   }
-  public setLightEmissiveIntensity(value: number) {
+  public setStartroomLightMaterialEmissiveIntensity(value: number) {
     this.startroomLightMaterial!.emissiveIntensity = value;
   }
-  public getLightEmissiveColor() {
+  public getStartroomLightMaterialEmissiveColor() {
     return this.startroomLightMaterial!.emissive;
   }
-  public setLightEmissiveColor(value: THREE.Color) {
+  public setStartroomLightMaterialEmissiveColor(value: THREE.Color) {
     this.startroomLightMaterial!.emissive.copy(value);
   }
-  public getLightOpacity() {
+  public getStartroomLightMaterialOpacity() {
     return this.startroomLightMaterial!.opacity;
   }
-  public setLightOpacity(value: number) {
+  public setStartroomLightMaterialOpacity(value: number) {
     this.startroomLightMaterial!.opacity = value;
   }
 
   // 自发光强度 getter/setter
-  get lightEmissiveIntensity(): number {
+  get startroomLightMaterialEmissiveIntensity(): number {
     return this.startroomLightMaterial!.emissiveIntensity;
   }
 
-  set lightEmissiveIntensity(value: number) {
+  set startroomLightMaterialEmissiveIntensity(value: number) {
     this.startroomLightMaterial!.emissiveIntensity = value;
   }
 
   // 自发光颜色 getter/setter
-  get lightEmissiveColor(): THREE.Color {
+  get startroomLightMaterialEmissiveColor(): THREE.Color {
     return this.startroomLightMaterial!.emissive;
   }
 
-  set lightEmissiveColor(value: THREE.Color) {
+  set startroomLightMaterialEmissiveColor(value: THREE.Color) {
     this.startroomLightMaterial!.emissive.copy(value);
   }
 
   // 自发光透明度 getter/setter
-  get opacity(): number {
+  get startroomLightMaterialOpacity(): number {
     return this.startroomLightMaterial!.opacity;
   }
 
-  set opacity(value: number) {
+  set startroomLightMaterialOpacity(value: number) {
     this.startroomLightMaterial!.opacity = value;
   }
 
@@ -1539,11 +1540,11 @@ export class MaterialManager {
     this.carlight.carlightMaterial = mesh.userData.meshData.materials.Car_ight;
     this.carlight.carlightMaterial!.toneMapped = false; // 关闭色调映射
     this.carlight.carlightMaterial!.aoMapIntensity = 0; // 关闭AO强度
-    this.carlight.carlightMaterial!.color = new THREE.Color('#000000'); // 设置初始颜色
+    this.carlight.carlightMaterial!.color = MaterialManager.LIGHT_OFF_COLOR; // 设置初始颜色
     this.carlight.carlightMaterial!.needsUpdate = true; // 强制材质更新
   }
 
-  set lightValue(value: number) {
+  set carlightValue(value: number) {
     this.carlight.carlightValue = value;
     // 颜色线性插值
     // let color = sceneConfig.carlightMaterialValue.current_light_color
@@ -1551,13 +1552,13 @@ export class MaterialManager {
     //   .lerp(sceneConfig.carlightMaterialValue.end_light_color, value);
 
     this.carlight.carlightColor = this.carlight.carlightColor
-      .copy(new THREE.Color('#000000'))
-      .lerp(new THREE.Color('#ffffff'), value);
-    this.carlight.carlightMaterial!.color = this.carlight.carlightColor;
-    this.carlight.carlightMaterial!.needsUpdate = true;
+      .copy(MaterialManager.LIGHT_OFF_COLOR)
+      .lerp(MaterialManager.LIGHT_ON_COLOR, value);
+    this.carlight.carlightMaterial!.color.copy(this.carlight.carlightColor);
+    // this.carlight.carlightMaterial!.needsUpdate = true;
   }
 
-  get lightValue(): number {
+  get carlightValue(): number {
     return this.carlight.carlightValue;
   }
 

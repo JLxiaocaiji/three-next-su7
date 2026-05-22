@@ -19,8 +19,8 @@ export const debounce = <T extends (...args: any[]) => void>(
   };
 };
 
-export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(v, max));
+
 export const fbm = (octaves: number, x: number) => {
   let sum = 0;
   let amp = 1;
@@ -36,8 +36,7 @@ export const fbm = (octaves: number, x: number) => {
 };
 
 /**
- * 经典 Perlin Noise（柏林噪声）完整实现
- * 还原自混淆代码，100% 兼容原始算法
+ * 经典 Perlin Noise（柏林噪声）
  */
 export class PerlinNoise {
   /**
@@ -227,4 +226,12 @@ export const isSupportMSAA = () => {
   const maxSamples = gl.getParameter(gl.MAX_SAMPLES);
 
   return hasFloatExtension && hasLinearExtension && !isBadSafari && maxSamples > 0;
+};
+
+export const isTouchDevice = (): boolean => {
+  return 'maxTouchPoints' in navigator && navigator.maxTouchPoints > 0;
+};
+
+export const randFloat = (u: number, e: number) => {
+  return u + Math.random() * (e - u);
 };

@@ -58,7 +58,6 @@ class Environment {
 
     // 创建渲染目标 (使用与输入环境贴图相同的分辨率)
     const size = envMap0.source.data as SourceData;
-    console.log(size);
     this._renderTarget = new THREE.WebGLRenderTarget(size.width, size.height, {
       magFilter: THREE.LinearFilter,
       minFilter: THREE.LinearFilter,
@@ -130,6 +129,8 @@ class Environment {
       //   if (this._pmremGenerator) {
       const pmremRT = this._pmremGenerator!.fromEquirectangular(this._renderTarget.texture);
       this.pbrEnvMap = pmremRT.texture;
+
+      //   this.pbrEnvMap.dispose();
       //   }
     }
   }
@@ -192,7 +193,7 @@ class EnvironmentManager {
   setState(
     state: 0 | 1 | 2,
     duration: number = 1,
-    ease: gsap.EaseFunction = gsap.parseEase('power3.inOut'),
+    ease: gsap.EaseString = 'power2.inOut',
     intensity: number = 1
   ): void {
     // 停止所有正在进行的动画
@@ -260,4 +261,4 @@ class EnvironmentManager {
   }
 }
 
-export { Environment };
+export { EnvironmentManager };

@@ -12,6 +12,9 @@ type Events = {
 
   // ScreenshotManager 反馈给 UI 的状态
   'ScreenshotManager:status': { isSaving: boolean; picUrl?: string };
+
+  // 点击 / 按压屏幕
+  clickEffect: { isclickEffect: boolean };
 };
 
 export const eventBus = mitt<Events>();

@@ -15,8 +15,9 @@ import { MaterialManager } from './materialManager';
 import { ReflectManager } from '@/classes/ReflectManager';
 import { EnvironmentManager } from '@/classes/Environment';
 import { ScreenshotManager } from './screenshotManager';
-import { BoxProjectionReflectionManager } from './boxProjectionReflectionManager';
-import { SpringCamera, CameraController } from './cameraManager';
+import { BoxProjectionProbe } from '@/classes/BoxProjectionProbe';
+import { SpringCamera } from '@/classes/SpringCamera';
+import { CameraManager } from './cameraManager';
 import { CarMoveManager } from './carMoveManager';
 import { sceneConfig } from './constantsConfig';
 import { isSupportMSAA } from '@/utils/index';
@@ -51,7 +52,7 @@ export class SceneManager {
   public readonly modelManager: ModelManager;
   public readonly materialManager: MaterialManager;
 
-  public cameraController: CameraController | null = null;
+  public cameraManager: CameraManager | null = null;
   // 反射
   public reflectManager: ReflectManager | null = null;
 
@@ -83,7 +84,7 @@ export class SceneManager {
   private envManager: EnvironmentManager | null = null;
 
   // 反射探针 提供 局部环境贴图校正
-  public boxProjectionReflectionManager: BoxProjectionReflectionManager | null = null;
+  public boxProjectionProbe: BoxProjectionProbe | null = null;
 
   // 后期处理
   public composer: EffectComposer | null = null;
@@ -118,7 +119,12 @@ export class SceneManager {
       pixelRatio: Math.min(window.devicePixelRatio, 2),
     };
 
-    this.camera = new THREE.PerspectiveCamera(45, this.sizes.width / this.sizes.height, 1, 1000);
+    this.camera = new THREE.PerspectiveCamera(
+      33.4,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      100
+    );
     this.camera.position.set(0, 0, 4);
 
     // 初始化立方相机和渲染目标（用于后续实时捕获清晰反射）
@@ -307,7 +313,6 @@ export class SceneManager {
      */
     // sm_car
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
-    this.scene.add(carModelCache);
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
     carMeshData && this.materialManager.initCarMaterial(carMeshData);
 
@@ -323,7 +328,6 @@ export class SceneManager {
     const sm_startroomModelCache = this.modelManager.getCache(
       'sm_startroom.raw' as CacheKey
     ) as ModelGroup;
-    this.scene.add(sm_startroomModelCache);
     const startroomMeshData = sm_startroomModelCache?.userData?.meshData as ModelMeshData;
     startroomMeshData && this.materialManager.initStartroomMaterial(startroomMeshData);
 
@@ -431,36 +435,56 @@ export class SceneManager {
       sceneConfig.ut_env_night.value as THREE.Texture,
       sceneConfig.ut_env_light.value as THREE.Texture
     );
-
     this.envManager.setState(2);
-
     // 设置 起始房间 发光材质设置
     // l = r.addNode(Ae.sm_startroom)
+    this.scene.add(sm_startroomModelCache);
     // g = r.addNode(new qO(l))
     this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
 
-    // const car = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    console.log('carModelCache', carModelCache);
 
-    // this.boxProjectionReflectionManager = new BoxProjectionReflectionManager(car); // this.modelManager.getCache('sm_car' as CacheKey) 创建盒子投影反射管理器
-    // // _.probeBoxMin.set(-3, -.1, -1.5),
-    // this.boxProjectionReflectionManager.probeBoxMin.set(-3, -0.1, -1.5);
-    // this.boxProjectionReflectionManager.probeBoxMax.set(3.6, 3, 1.5);
+    // _ = new dO
+    this.boxProjectionProbe = new BoxProjectionProbe(this.renderer, carModelCache);
+    // this.boxProjectionProbe.boxProjection = true;
+    // this.boxProjectionProbe.debug = true;
+    this.scene.add(carModelCache);
 
-    // this.materialManager.initCarLightMaterial(car);
+    // this.viewer.addComponent(Ae.sm_car, _);
 
-    // this.springCamera = new SpringCamera({
-    //   springLength: 11,
-    //   rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
-    //   fov: 33.4,
-    //   lookAt: new THREE.Vector3(0, 0.8, 0),
-    // });
+    // _.probeBoxMin.set(-3, -.1, -1.5),
+    this.boxProjectionProbe.probeBoxMin.set(-3, -0.1, -1.5);
+    this.boxProjectionProbe.probeBoxMax.set(3.6, 3, 1.5);
 
-    // this.cameraController = new CameraController(this.springCamera, this.renderer.domElement);
+    // m = r.addNode(new ZO(A))
+    this.materialManager.initCarLightMaterial(carModelCache);
 
-    // /**
-    //  * 点击绑定事件
-    //  */
-    // // xxxx  JO
+    // D = r.addNode(new Hl({ springLength: 11, rotation: new go(0,Math.PI * .5,0), fov: 33.4, lookAt: new Li(0,.8,0) }))
+    this.springCamera = new SpringCamera({
+      springLength: 11,
+      rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
+      fov: 33.4,
+      lookAt: new THREE.Vector3(0, 0.8, 0),
+      camera: this.camera,
+    });
+
+    this.cameraManager = new CameraManager(
+      this.springCamera,
+      this.renderer.domElement,
+      this.camera
+    );
+
+    this.cameraManager.enableControlCamera = true;
+
+    /**
+     * 点击绑定事件
+     */
+    // xxxx  JO
+    this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+
+    // const R = r.addNode(new $O(A,U))
 
     // // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
     // const carMoveManager = new CarMoveManager(car, this.cameraController);
@@ -501,6 +525,14 @@ export class SceneManager {
     // this._topLightController = g  // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache)
     // this._carSpeedUpdate = R // const carMoveManager = new CarMoveManager(car, this.cameraController);
   }
+
+  private onPointerDown = () => {
+    eventBus.emit('clickEffect', { isclickEffect: true });
+  };
+
+  private onPointerUp = () => {
+    eventBus.emit('clickEffect', { isclickEffect: false });
+  };
 
   // 后期处理
   private initPostProcessing(): void {
@@ -654,6 +686,9 @@ export class SceneManager {
       window.removeEventListener('resize', this._resizeHandler);
       this._resizeHandler = null;
     }
+
+    this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
 
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {

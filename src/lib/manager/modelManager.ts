@@ -9,7 +9,7 @@ import { CacheKey } from '@/types/index';
 import { getFileSize } from '@/utils';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
-import { lerp, PerlinNoise, clamp } from '@/utils';
+import { PerlinNoise, clamp } from '@/utils';
 import { sceneConfig } from './constantsConfig';
 import { SceneManager } from './sceneManager';
 import { MaterialManager } from './materialManager';
@@ -619,7 +619,7 @@ export class ModelManager {
   }
 
   public carSpeedUpUpdate(value: number) {
-    this.carSpeedUp.currentVelocity = lerp(
+    this.carSpeedUp.currentVelocity = THREE.MathUtils.lerp(
       this.carSpeedUp.currentVelocity,
       this.carSpeedUp.targetVelocity,
       value * this.carSpeedUp.lerpStrength
@@ -661,7 +661,7 @@ export class ModelManager {
     model!.position.copy(tempPos);
 
     // 旋转插值
-    model!.rotation.z = lerp(originRotZ, targetRotZ, value);
+    model!.rotation.z = THREE.MathUtils.lerp(originRotZ, targetRotZ, value);
   }
 
   // 初始化 sm_car_lightbar

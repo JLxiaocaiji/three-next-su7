@@ -109,7 +109,7 @@ export class MipBlurPass {
       depthTest: false,
     });
 
-    // 初始化一个占位纹理，方便外部直接使用
+    // 初始化一个占位纹理
     // this.blurTexture = this._mipmapRenderTargets[0].texture;
   }
 

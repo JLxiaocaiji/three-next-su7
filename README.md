@@ -13,3 +13,11 @@
 encoding:3000 → 删除这行 或 写 LinearColorSpace
 所有颜色贴图（baseColor、map、diffuse）
 encoding:3001 → 必须改成 SRGBColorSpace
+
+// 开启报错
+for (let material of Object.values(this.\_node.userData.meshData.materials)) {
+if (material instanceof THREE.MeshStandardMaterial) {
+// 启 USE_BOX_PROJECTION 宏
+material.defines!.USE_BOX_PROJECTION = '';
+}
+}

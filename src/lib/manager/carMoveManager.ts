@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { sceneConfig } from './constantsConfig';
-import { lerp } from '@/utils';
 
 // 事件/状态枚举（对应原 Ie、Bn）
 const GameState = {
@@ -47,7 +46,7 @@ export class CarMoveManager {
   // 每帧更新（对应原 update）
   update(deltaTime: number) {
     // 平滑插值速度
-    this._currentVelocity = lerp(
+    this._currentVelocity = THREE.MathUtils.lerp(
       this._currentVelocity,
       this._targetVelocity,
       deltaTime * this._lerpStrength
@@ -68,9 +67,9 @@ export class CarMoveManager {
 
     // 根据状态决定加速值
     if (CurrentState.currentShowingState === GameState.State1) {
-      speed = lerp(speed, this._currentVelocity, deltaTime * 2);
+      speed = THREE.MathUtils.lerp(speed, this._currentVelocity, deltaTime * 2);
     } else {
-      speed = lerp(speed, 0, deltaTime * 5);
+      speed = THREE.MathUtils.lerp(speed, 0, deltaTime * 5);
     }
 
     sceneConfig.u_speedUpBackgroundValue.value = speed;
