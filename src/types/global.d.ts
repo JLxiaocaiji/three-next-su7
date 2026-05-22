@@ -1,4 +1,6 @@
 // global.d.ts
+
+import 'react';
 interface NodeModule {
   hot?: {
     accept(dependencies?: string | string[], callback?: () => void): void;
@@ -10,6 +12,26 @@ interface NodeModule {
     check(autoApply?: boolean): Promise<any>;
     apply(options?: any): Promise<any>;
   };
+}
+
+declare global {
+  type ProgressCallback = (p: { loadedBytes: number; currentFile: string }) => void;
+}
+
+declare module 'react' {
+  interface CSSProperties {
+    '--alpha-background-color'?: string;
+    '--any-var'?: string;
+    '--alpha-pointer-background-color'?: string;
+    '--alpha-pointer-box-shadow'?: string;
+  }
+}
+
+declare module 'three' {
+  interface Object3D {
+    /** 引擎扩展：局部 Uniforms（同一个材质不同实例的独立参数） */
+    localUniforms: Record<string, any>;
+  }
 }
 
 export {};
