@@ -1,8 +1,5 @@
 import * as THREE from 'three';
 
-const tempBox = new THREE.Box3();
-const tempVector = new THREE.Vector3();
-
 export class BoxProjectionProbe {
   private readonly boundingBox: THREE.Box3 = new THREE.Box3();
   private readonly probeBox: THREE.Box3 = new THREE.Box3();
@@ -23,6 +20,8 @@ export class BoxProjectionProbe {
 
   // 调试辅助对象
   private boxHelper: THREE.Box3Helper | null = null;
+  private tempBox = new THREE.Box3();
+  private tempVector = new THREE.Vector3();
 
   // 构造函数
   constructor(renderer: THREE.WebGLRenderer, node: THREE.Object3D) {
@@ -57,11 +56,11 @@ export class BoxProjectionProbe {
     // 重置更新标记
     this.needUpdate = false;
 
-    tempBox.copy(this.boundingBox);
+    this.tempBox.copy(this.boundingBox);
 
     // 平移到世界坐标 + 合并探针包围盒
-    tempBox.translate(this._node.getWorldPosition(tempVector));
-    tempBox.union(this.probeBox);
+    this.tempBox.translate(this._node.getWorldPosition(this.tempVector));
+    this.tempBox.union(this.probeBox);
 
     // 更新全局着色器参数
     this.globalUniforms.probePos.set(
@@ -70,8 +69,8 @@ export class BoxProjectionProbe {
       this._probeCenter.z,
       this._boxProjection ? 1 : 0
     );
-    this.globalUniforms.probeBoxMin.copy(tempBox.min);
-    this.globalUniforms.probeBoxMax.copy(tempBox.max);
+    this.globalUniforms.probeBoxMin.copy(this.tempBox.min);
+    this.globalUniforms.probeBoxMax.copy(this.tempBox.max);
 
     if (this.boxHelper) {
       this.boxHelper.box.copy(this.probeBox);

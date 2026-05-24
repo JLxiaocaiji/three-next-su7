@@ -22,13 +22,15 @@ export class ScreenshotManager {
   private _frontScene: THREE.Scene;
   private _camera: THREE.OrthographicCamera;
   private _frontRenderer: THREE.WebGLRenderer | null = null;
-  private _material: THREE.MeshBasicMaterial;
+  private _carMaterial: THREE.MeshBasicMaterial; // 专门分给背景网格
+  private _uiMaterials: THREE.MeshBasicMaterial[] = []; // 所有需要淡入淡出的UI材质
 
   // 纹理与网格
   private _canvasTexture: THREE.CanvasTexture | null = null;
   private _qrcodeTexture: THREE.CanvasTexture;
   private _carMesh: THREE.Mesh | null = null;
   private _hiddenObjects: THREE.Mesh[] = []; // 截图时显示
+  public enabled: boolean = false;
 
   // 状态
   private _isSaving: boolean = false;
@@ -38,12 +40,12 @@ export class ScreenshotManager {
   private _mainRenderer: THREE.WebGLRenderer;
   private _mainScene: THREE.Scene;
   private _mainCamera: THREE.Camera;
-
   // GSAP动画时间线
   private _showTimeline: gsap.core.Timeline | null = null;
   private _hideTimeline: gsap.core.Timeline | null = null;
-
   private size: { width: number; height: number } = { width: 0, height: 0 };
+
+  private _boundOnResize = this._onResize.bind(this);
 
   constructor(mainRenderer: THREE.WebGLRenderer, mainScene: THREE.Scene, mainCamera: THREE.Camera) {
     this._mainRenderer = mainRenderer;
@@ -66,7 +68,7 @@ export class ScreenshotManager {
     this._canvasTexture.colorSpace = THREE.SRGBColorSpace;
 
     // 初始化共享材质（关闭深度测试，确保在最上层）
-    this._material = new THREE.MeshBasicMaterial({
+    this._carMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       toneMapped: false,
       depthWrite: false,
@@ -74,6 +76,7 @@ export class ScreenshotManager {
       // map: new THREE.Texture(),
       map: this._canvasTexture,
       opacity: 0, // 初始隐藏
+      name: 'car',
     });
 
     // 初始化二维码画布
@@ -90,7 +93,7 @@ export class ScreenshotManager {
     this._initUIElements();
 
     // 绑定事件
-    window.addEventListener('resize', this._onResize.bind(this));
+    window.addEventListener('resize', this._boundOnResize);
     // this._mainRenderer.render(this._frontScene, this._camera);
   }
 
@@ -119,7 +122,7 @@ export class ScreenshotManager {
   }
 
   private createMaterial(texture: THREE.Texture): THREE.MeshBasicMaterial {
-    return new THREE.MeshBasicMaterial({
+    const mat = new THREE.MeshBasicMaterial({
       transparent: true,
       toneMapped: false,
       depthWrite: false,
@@ -127,6 +130,8 @@ export class ScreenshotManager {
       map: texture,
       opacity: 0, // 初始隐藏
     });
+    this._uiMaterials.push(mat);
+    return mat;
   }
 
   /**
@@ -152,66 +157,63 @@ export class ScreenshotManager {
    * 初始化所有UI元素（主画布、水印、logo、二维码）
    */
   private async _initUIElements(): Promise<void> {
-    // 1. 主画布平面
-    // this._canvasTexture = new THREE.CanvasTexture(this._mainRenderer.domElement);
-    // this._canvasTexture.colorSpace = THREE.SRGBColorSpace;
-
-    // 2. 汽车画布
-    this._carMesh = this.createMesh(new THREE.PlaneGeometry(1, 1), this._material);
-    // this._carMesh = this.createMesh(
-    //   new THREE.PlaneGeometry(this.size.width, this.size.height),
-    //   this._material
-    // );
+    // 1. 汽车画布
+    this._carMesh = this.createMesh(new THREE.PlaneGeometry(1, 1), this._carMaterial, 'car');
     this._frontScene.add(this._carMesh);
     // this._hiddenObjects.push(this._carMesh);
 
-    // 3. 顶部左侧水印
+    // 2. 顶部左侧水印
     const titleTexture = this.loadTexture(UI_SVGS.topLeftWatermark);
     const titleMesh = this.createMesh(
       new THREE.PlaneGeometry(500, (500 * 228) / 718),
-      this.createMaterial(titleTexture)
+      this.createMaterial(titleTexture),
+      'title'
     );
     this._frontScene.add(titleMesh);
 
-    // 4. 底部左侧logo
+    // 3. 底部左侧logo
     const logoTexture = this.loadTexture('/icon/gamemcu.webp', true);
     const logoMesh = this.createMesh(
       new THREE.PlaneGeometry(130, (130 * 53) / 187),
-      this.createMaterial(logoTexture)
+      this.createMaterial(logoTexture),
+      'logo'
     );
     this._frontScene.add(logoMesh);
     this._hiddenObjects.push(logoMesh);
 
-    // 5. 底部右侧水印
+    // 4. 底部右侧水印
     const copyrightTexture = this.loadTexture(UI_SVGS.bottomRightWatermark);
     const copyrightMesh = this.createMesh(
       new THREE.PlaneGeometry(550, (550 * 118) / 729),
-      this.createMaterial(copyrightTexture)
+      this.createMaterial(copyrightTexture),
+      'copyright'
     );
     this._frontScene.add(copyrightMesh);
 
-    // 6. 二维码背景
+    // 5. 二维码背景
     const qrBgTexture = this.loadTexture('/icon/qrcode.webp', true);
     const qrBgMesh = this.createMesh(
       new THREE.PlaneGeometry(160, (160 * 330) / 256),
-      this.createMaterial(qrBgTexture)
+      this.createMaterial(qrBgTexture),
+      'qrBg'
     );
     this._frontScene.add(qrBgMesh);
     this._hiddenObjects.push(qrBgMesh);
 
-    // 7. 二维码平面
+    // 6. 二维码平面
     const qrMesh = this.createMesh(
       new THREE.PlaneGeometry(150, 150),
-      this.createMaterial(this._qrcodeTexture)
+      this.createMaterial(this._qrcodeTexture),
+      'qr'
     );
     await this._generateQRCode();
     this._frontScene.add(qrMesh);
     this._hiddenObjects.push(qrMesh);
 
-    this._updateLayout();
-
     // 初始不展示，截图时才展示
     this._hiddenObjects.forEach((obj) => (obj.visible = false));
+
+    this._updateLayout();
   }
 
   /**
@@ -219,7 +221,8 @@ export class ScreenshotManager {
    * @param duration 动画时长（秒）
    */
   show(duration: number = 1): void {
-    this._material.opacity = 0;
+    this.enabled = true;
+    this._carMaterial.opacity = 1;
 
     // 先停止所有正在进行的隐藏动画
     if (this._hideTimeline) {
@@ -230,19 +233,16 @@ export class ScreenshotManager {
     // 创建显示动画时间线
     this._showTimeline = gsap.timeline();
 
-    this._frontScene.traverse((obj) => {
-      // 判断是否是 Mesh
-      if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
-        this._showTimeline!.to(
-          obj.material,
-          {
-            opacity: 1,
-            duration: duration,
-            ease: 'cubic.inOut',
-          },
-          0
-        );
-      }
+    this._uiMaterials.forEach((mat) => {
+      this._showTimeline!.to(
+        mat,
+        {
+          opacity: 1,
+          duration: duration,
+          ease: 'cubic.inOut',
+        },
+        0
+      );
     });
   }
 
@@ -261,25 +261,27 @@ export class ScreenshotManager {
     this._hideTimeline = gsap.timeline({
       onComplete: () => {
         this._hideTimeline = null;
+        this.enabled = false;
       },
     });
 
-    // 主材质整体淡出
-    // this._hideTimeline.to(
-    //   this._material,
-    //   {
-    //     opacity: 0,
-    //     duration: duration,
-    //     ease: 'cubic.inOut',
-    //   },
-    //   0
-    // );
-
-    this._frontScene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
-        this._hideTimeline!.to(obj.material, { opacity: 0, duration, ease: 'cubic.inOut' }, 0);
-      }
+    this._uiMaterials.forEach((mat) => {
+      this._hideTimeline!.to(
+        mat,
+        {
+          opacity: 0,
+          duration: duration,
+          ease: 'cubic.inOut',
+        },
+        0
+      );
     });
+
+    // this._frontScene.traverse((obj) => {
+    //   if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
+    //     this._hideTimeline!.to(obj.material, { opacity: 0, duration, ease: 'cubic.inOut' }, 0);
+    //   }
+    // });
   }
 
   /**
@@ -289,11 +291,16 @@ export class ScreenshotManager {
   async screenshot(url: string = 'https://gamemcu.com/su7?FFFFFF1010'): Promise<void> {
     this._isSaving = true;
 
-    // 停止所有动画，确保截图时UI状态稳定
-    gsap.killTweensOf(this._material);
-    this._hiddenObjects.forEach((obj) => gsap.killTweensOf(obj.material));
+    this.size = this.getRendererSize();
 
-    // 初始化独立渲染器（仅在第一次截图时创建）
+    // 暂停UI淡入淡出动画
+    if (this._showTimeline) this._showTimeline.pause();
+    if (this._hideTimeline) this._hideTimeline.pause();
+
+    this._uiMaterials.forEach((m) => (m.opacity = 1));
+    this._carMaterial.opacity = 1; // 背景车平面可见
+
+    // 初始化独立渲染器
     if (!this._frontRenderer) {
       this._frontRenderer = new THREE.WebGLRenderer({
         preserveDrawingBuffer: true, // 必须开启，否则toDataURL会得到空白
@@ -302,8 +309,9 @@ export class ScreenshotManager {
       });
       this._frontRenderer.setPixelRatio(window.devicePixelRatio);
       this._frontRenderer.outputColorSpace = this._mainRenderer.outputColorSpace;
-      this._frontRenderer.setSize(this.size.width, this.size.height);
     }
+
+    this._frontRenderer.setSize(this.size.width, this.size.height);
 
     // 1. 渲染主场景到纹理
     this._mainRenderer.render(this._mainScene, this._mainCamera);
@@ -322,27 +330,32 @@ export class ScreenshotManager {
       obj.visible = false;
     });
 
+    this._carMaterial.opacity = 0; // 截图结束，把背景车平面隐形
+    // this._uiMaterials.forEach((m) => (m.opacity = this.enabled ? 1 : 0));
+
     // 6. 转换为DataURL
     const picUrl = this._frontRenderer.domElement.toDataURL('image/png');
-    const scaledWidth = (1228.8 * this.size.width) / 1920;
-    const scaledHeight = (scaledWidth * this.size.height) / this.size.width;
-    let width = scaledWidth;
-    let height = scaledHeight;
+    const width = (1228.8 * this.size.width) / 1920;
+    const height = (width * this.size.height) / this.size.width;
 
     this._isSaving = false;
-    eventBus.emit('ScreenshotManager:complete', { picUrl, width, height });
+
+    if (this._showTimeline) this._showTimeline.resume();
+    if (this._hideTimeline) this._hideTimeline.resume();
+
+    eventBus.emit('ScreenshotManager:complete', { picUrl, width, height, visible: true });
   }
 
   /**
    * 每帧渲染UI层（需在主渲染循环中调用）
    */
   render(): void {
-    if (!this._isSaving && this._material.opacity > 0) {
+    if (this.enabled && !this._isSaving && this._carMaterial.opacity > 0) {
       // 保存主渲染器的自动清除状态
       const autoClear = this._mainRenderer.autoClear;
       this._mainRenderer.autoClear = false;
 
-      this._canvasTexture!.needsUpdate = true;
+      // this._canvasTexture!.needsUpdate = true;
 
       // 渲染UI层在主场景之上
       this._mainRenderer.render(this._frontScene, this._camera);
@@ -352,41 +365,14 @@ export class ScreenshotManager {
     }
   }
 
-  /**
-   * 销毁资源和所有动画
-   */
-  dispose(): void {
-    window.removeEventListener('resize', this._onResize.bind(this));
-
-    // 停止并清理所有GSAP动画
-    gsap.killTweensOf(this._material);
-    this._hiddenObjects.forEach((obj) => gsap.killTweensOf(obj.material));
-    if (this._showTimeline) this._showTimeline.kill();
-    if (this._hideTimeline) this._hideTimeline.kill();
-
-    // 释放Three.js资源
-    this._material.dispose();
-    this._canvasTexture?.dispose();
-    this._qrcodeTexture.dispose();
-
-    this._frontRenderer && this._frontRenderer.dispose();
-
-    this._frontScene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.dispose();
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    });
-    eventBus.off('ScreenshotManager:complete');
-  }
-
-  private createMesh(geometry: THREE.BufferGeometry, material: THREE.Material): THREE.Mesh {
+  private createMesh(
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    name: string
+  ): THREE.Mesh {
     // & { localUniforms: Record<string, any>;}
-    const mesh = new THREE.Mesh(geometry, material) as any;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
     // 确保属性存在
     // if (!mesh.localUniforms) mesh.localUniforms = {};
 
@@ -397,6 +383,7 @@ export class ScreenshotManager {
    * 窗口大小变化处理
    */
   private _onResize(): void {
+    this.size = this.getRendererSize();
     // 更新相机
     this._camera.left = -this.size.width / 2;
     this._camera.right = this.size.width / 2;
@@ -405,10 +392,13 @@ export class ScreenshotManager {
     this._camera.updateProjectionMatrix();
 
     // 更新主画布纹理
-    this._canvasTexture!.dispose();
-    this._canvasTexture = new THREE.CanvasTexture(this._mainRenderer.domElement);
+    if (this._canvasTexture) {
+      this._canvasTexture.needsUpdate = true;
+    }
     // this._carMesh!.localUniforms.map = this._canvasTexture;
-    this._carMesh!.scale.set(this.size.width, this.size.height, 1);
+    if (this._carMesh) {
+      this._carMesh.scale.set(this.size.width, this.size.height, 1);
+    }
 
     // 更新所有UI元素布局
     this._updateLayout();
@@ -420,33 +410,32 @@ export class ScreenshotManager {
   private _updateLayout(): void {
     const scale = this.size.width / 1920; // 基于1920px宽度的缩放比例
 
-    this._frontScene.children.forEach((child, index) => {
-      const mesh = child as THREE.Mesh;
-      mesh.scale.set(scale, scale, scale);
+    this._frontScene.children.forEach((child) => {
+      child.scale.set(scale, scale, scale);
 
       // 按原始代码的位置公式更新
-      switch (index) {
-        case 0: // 主画布
-          mesh.scale.set(this.size.width, this.size.height, 1);
+      switch (child.name) {
+        case 'car': // 主画布
+          child.scale.set(this.size.width, this.size.height, 1);
           break;
-        case 1: // 顶部左侧水印
-          mesh.position.set(this.size.width * (-0.5 + 0.2), this.size.height * (0.5 - 0.2), 0);
+        case 'title': // 顶部左侧水印
+          child.position.set(this.size.width * (-0.5 + 0.2), this.size.height * (0.5 - 0.2), 0);
           break;
-        case 2: // 底部左侧logo
-          mesh.position.set(this.size.width * (-0.5 + 0.13), this.size.height * (-0.5 + 0.15), 0);
+        case 'logo': // 底部左侧logo
+          child.position.set(this.size.width * (-0.5 + 0.13), this.size.height * (-0.5 + 0.15), 0);
           break;
-        case 3: // 底部右侧水印
-          mesh.position.set(this.size.width * (0.5 - 0.23), this.size.height * (-0.5 + 0.15), 0);
+        case 'copyright': // 底部右侧水印
+          child.position.set(this.size.width * (0.5 - 0.23), this.size.height * (-0.5 + 0.15), 0);
           break;
-        case 4: // 二维码背景
-          mesh.position.set(
+        case 'qrBg': // 二维码背景
+          child.position.set(
             this.size.width * (0.5 - 0.15),
             this.size.height * (0.5 - 0.2) - 23 * scale,
             0
           );
           break;
-        case 5: // 二维码
-          mesh.position.set(this.size.width * (0.5 - 0.15), this.size.height * (0.5 - 0.2), 0);
+        case 'qr': // 二维码
+          child.position.set(this.size.width * (0.5 - 0.15), this.size.height * (0.5 - 0.2), 0);
           break;
       }
     });
@@ -464,6 +453,41 @@ export class ScreenshotManager {
   }
 
   get material(): THREE.MeshBasicMaterial {
-    return this._material;
+    return this._carMaterial;
+  }
+
+  get _enabled(): boolean {
+    return this.enabled;
+  }
+
+  /**
+   * 销毁资源和所有动画
+   */
+  dispose(): void {
+    window.removeEventListener('resize', this._boundOnResize);
+
+    // 停止并清理所有GSAP动画
+    if (this._showTimeline) this._showTimeline.kill();
+    if (this._hideTimeline) this._hideTimeline.kill();
+
+    // 释放Three.js资源
+    this._carMaterial.dispose();
+    this._canvasTexture?.dispose();
+    this._qrcodeTexture.dispose();
+
+    this._frontRenderer!.dispose();
+
+    this._frontScene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m) => m.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    });
+    this._uiMaterials.forEach((tex) => tex.dispose());
+    this._uiMaterials = [];
   }
 }

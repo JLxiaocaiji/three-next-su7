@@ -6,10 +6,10 @@ export default function RightContent({
   part,
   setPart,
 }: {
-  part: number;
-  setPart: (part: number) => void;
+  part: Module;
+  setPart: (part: Module) => void;
 }) {
-  type Part = { stepLabel: string; partId: number };
+  type Part = { stepLabel: string; partId: Module };
 
   const partList: Part[] = [
     { stepLabel: 'SU7', partId: 0 },
