@@ -566,8 +566,16 @@ export class SceneManager {
     // A, m, D, U: this._renderer, this._scene, this._camera, this._scene
     this.renderer.compile(this.scene, this.camera);
 
-    // Ie.emit(Ie.PRELOADED);  对应 eventBus
-    // eventBus.emit('PRELOADED');    currentModule = 1; jU(): 显示一个平滑动画的加载进度条 → 加载完成后自动渐隐消失 → 消失后播放背景音乐 audioManager
+    // Ie.emit(Ie.PRELOADED);  对应 eventBus; eventBus.emit('PRELOADED');
+    /**
+     * this.on(this.PRELOADED, () => {
+            this.emit(this.UPDATESHOWINGSTATE, 1)
+        }
+        currentModule = 1;
+     */
+    /**
+     * jU(): 显示一个平滑动画的加载进度条 → 加载完成后自动渐隐消失 → 消失后播放背景音乐 audioManager
+     */
 
     // let r = Ae.getCustomParams()
     const r = this.getCustomParams();
