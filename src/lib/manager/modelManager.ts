@@ -1026,6 +1026,6 @@ export class ModelManager {
 
     const meshData = model?.userData?.meshData as ModelMeshData;
 
-    meshData.materials.m_simplecar.opacity = value; // Ag
+    meshData.materials.m_simpleCar.opacity = value; // Ag
   }
 }

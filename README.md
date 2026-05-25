@@ -21,3 +21,5 @@ if (material instanceof THREE.MeshStandardMaterial) {
 material.defines!.USE_BOX_PROJECTION = '';
 }
 }
+
+各种 forEach，优化

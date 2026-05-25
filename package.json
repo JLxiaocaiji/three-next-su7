@@ -20,6 +20,7 @@
     "@types/dat.gui": "^0.7.13",
     "@uiw/react-color": "^2.10.1",
     "@uiw/react-color-slider": "^2.10.1",
+    "@vercel/blob": "^2.4.0",
     "@vercel/otel": "^2.1.1",
     "dat.gui": "^0.7.9",
     "dotenv": "^17.4.1",

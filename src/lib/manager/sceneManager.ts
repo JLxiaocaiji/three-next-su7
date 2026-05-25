@@ -89,7 +89,10 @@ export class SceneManager {
   // 后期处理
   public composer: EffectComposer | null = null;
   private renderPass: RenderPass | null = null;
-  private smaaEffect: SMAAEffect | null = null;
+  public effect = {
+    bloomEffect: null as BloomEffect | null,
+    smaaEffect: null as SMAAEffect | null,
+  };
 
   //   public readonly gui: dat.GUI;
   public gui: DatGUIType.GUI | null = null;
@@ -163,9 +166,6 @@ export class SceneManager {
 
     this.modelManager = ModelManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
-
-    // eventBus
-    this.setupBusListeners();
   }
 
   public static getInstance(container?: HTMLCanvasElement): SceneManager {
@@ -277,7 +277,9 @@ export class SceneManager {
 
       await this.materialManager.initEnvironment('t_env_night');
 
-      this.createScene();
+      await this.createScene();
+
+      this.compileScene();
     }
   }
 
@@ -399,7 +401,7 @@ export class SceneManager {
     sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
   }
 
-  public createScene(): void {
+  public async createScene(): Promise<void> {
     this.screenshotManager = new ScreenshotManager(this.renderer, this.scene, this.camera);
 
     this.scene.background = new THREE.Color(0, 0, 0);
@@ -487,7 +489,7 @@ export class SceneManager {
     // const R = r.addNode(new $O(A,U))
 
     // // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-    // const carMoveManager = new CarMoveManager(car, this.cameraController);
+    // const carMoveManager = new CarMoveManager(car, this.cameraManager);
     // this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
 
     // // 找到 3D 模型里名字 = "WeiYi" 的子物体
@@ -509,21 +511,68 @@ export class SceneManager {
     // // sm_simpleCar
     // this.modelManager.initSimpleCarModel();
 
-    // const bloom = new BloomEffect({
-    //   blendFunction: THREE.AdditiveBlending,
-    //   luminanceThreshold: 0,
-    //   luminanceSmoothing: 1.6,
-    //   mipmapBlur: true,
-    //   // intensity: 1.0,
-    // });
+    // r.addPlugin(new K3({}))
+    this.effect.bloomEffect = new BloomEffect({
+      blendFunction: THREE.AdditiveBlending, // mo -> blendFunction: Ze.ADD,
+      luminanceThreshold: 0, // 亮度阈值
+      luminanceSmoothing: 1.6, // 亮度平滑度
+      mipmapBlur: true, // 高性能多级纹理模糊
+    });
 
-    // this.initPostProcessing();
+    this.composer!.addPass(new EffectPass(this.camera, this.effect.bloomEffect));
+
+    // fO 抗锯齿
+    this.effect.smaaEffect = new SMAAEffect({
+      preset: SMAAPreset.MEDIUM,
+    });
+    const effectPass = new EffectPass(this.camera, this.effect.smaaEffect!);
+    this.composer!.addPass(effectPass);
 
     // this._envController = h  // this.envManager
-    // this._springCtr = U  // this.cameraController
+    // this._springCtr = U  // this.cameraManager
     // this._carLightController = m  // this.materialManager.initCarLightMaterial(car);
     // this._topLightController = g  // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache)
-    // this._carSpeedUpdate = R // const carMoveManager = new CarMoveManager(car, this.cameraController);
+    // this._carSpeedUpdate = R // const carMoveManager = new CarMoveManager(car, this.cameraManager);
+
+    // this._bloom = Pe   // new K3  // this.effect.bloomEffect
+    // this._projectionProbe = _  // _ = new dO()    // this.boxProjectionProbe
+
+    // this._accessories = {
+    //   s1_c: ne,      // ne = r.addNode(cB) // this.modelManager.initWeiyiModel();
+    //   s1_cpcl: ce,   // ce = r.addNode(xB) // this.modelManager.initLightbarModel();
+    //   s2_b: xe,      // xe = r.addNode(eB) // this.modelManager.initSizeModel();
+    //   s2_c: Se,      // Se = r.addNode(tB) // this.modelManager.initCurvatureModel()
+    //   s3_b: $,       // $ = r.addNode(nB)  // this.modelManager.initWindspeedModel();
+    //   s3_c: q,       // q = r.addNode(iB)  // this.modelManager.initLinecarModel();
+    //   s4_b: N,       // N = r.addNode(lB)  // this.modelManager.initCarRadarPointsModel()
+    //   s4_c: ie,      // ie = r.addNode(rB) // this.modelManager.initCarradarModel();
+    //   s4_cSC: _e,    // _e = r.addNode(sB) // this.modelManager.initSimpleCarModel();
+    // };
+
+    // eventBus
+    this.setupBusListeners();
+    // this.eventRegister();  // eventRegister.ts
+  }
+
+  public compileScene() {
+    // BO()  共享材质
+    const model = this.modelManager.getCache('sm_simplecar' as CacheKey);
+    if (!model) return;
+    let tempMaterial = model.userData.meshData.materials.m_simpleCar as THREE.MeshMatcapMaterial;
+    tempMaterial.matcap = sceneConfig.ut_scar_matcap.value;
+    tempMaterial.needsUpdate = true;
+
+    // this.viewer.compile()
+    // A, m, D, U: this._renderer, this._scene, this._camera, this._scene
+    this.renderer.compile(this.scene, this.camera);
+
+    // Ie.emit(Ie.PRELOADED);  对应 eventBus
+    // eventBus.emit('PRELOADED');    currentModule = 1; jU(): 显示一个平滑动画的加载进度条 → 加载完成后自动渐隐消失 → 消失后播放背景音乐 audioManager
+
+    // let r = Ae.getCustomParams()
+    const r = this.getCustomParams();
+
+    // r && Ie.emit(Ie.CHANGECOLOR, r)
   }
 
   private onPointerDown = () => {
@@ -540,14 +589,7 @@ export class SceneManager {
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
 
-    // 抗锯齿
-    this.smaaEffect = new SMAAEffect({
-      preset: SMAAPreset.MEDIUM,
-    });
-    const effectPass = new EffectPass(this.camera, this.smaaEffect!);
-
     this.composer.addPass(this.renderPass);
-    this.composer.addPass(effectPass);
   }
 
   public getEnvMap(envName: EnvMaps): THREE.Texture | null {
@@ -676,10 +718,79 @@ export class SceneManager {
     });
   }
 
+  // 解析 url, "custom"自定义颜色，字符串数字颜色索引，0默认颜色
+  getCustomParams(): 'custom' | string | 0 {
+    const urlParams = new URLSearchParams(window.location.search);
+    const vParam = urlParams.get('v');
+
+    // 处理10位自定义颜色格式: RRGGBB + 粗糙度(2位) + 金属度(2位)
+    if (vParam && vParam.length === 10) {
+      const colorHex = vParam.slice(0, 6);
+      const roughHex = vParam.slice(6, 8);
+      const metalHex = vParam.slice(8, 10);
+
+      // 解析为0-1范围的浮点数
+      const roughness = parseInt(roughHex, 16) / 255;
+      const metalness = parseInt(metalHex, 16) / 255;
+
+      const customColor = sceneConfig.colors.get('custom');
+      if (!customColor) {
+        return 0;
+      }
+
+      roughness && (customColor.rough = roughness);
+      metalness && (customColor.metal = metalness);
+
+      if (colorHex) {
+        const baseColor = new THREE.Color(`#${colorHex}`);
+        customColor.col.copy(baseColor);
+        baseColor.convertLinearToSRGB();
+        // 计算并存储HSL值
+        baseColor.getHSL(customColor.hsl!);
+      }
+
+      return 'custom';
+    }
+    if (vParam && vParam.startsWith('h') && vParam.length === 3) {
+      return vParam.slice(1, 3);
+    }
+
+    // 不符合任何格式，返回默认值
+    return 0;
+  }
+
+  // url + 材质参数
+  generateCustomParams(): string {
+    // 从 Map 中安全获取 custom（解决 undefined 类型报错）
+    const custom = sceneConfig.colors.get('custom');
+    if (!custom) return '';
+
+    if (Ie.currentColorIndex === 'custom') {
+      // 粗糙度 → 2位十六进制
+      let n = Math.round(custom.rough * 255).toString(16);
+      if (n.length < 2) n = '0' + n;
+
+      // 金属度 → 2位十六进制
+      let r = Math.round(custom.metal * 255).toString(16);
+      if (r.length < 2) r = '0' + r;
+
+      // 颜色十六进制
+      const s = custom.col.getHexString();
+
+      // 拼接完整 URL
+      const base = 'https://gamemcu.com/su7?v=';
+      return base + s + n + r;
+    } else {
+      // 预设颜色
+      const base = 'https://gamemcu.com/su7?v=h';
+      return base + Ie.currentColorIndex;
+    }
+  }
+
   public dispose(): void {
     this.stopRender();
     if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
-    if (this.smaaEffect) this.smaaEffect.dispose();
+    if (this.effect.smaaEffect) this.effect.smaaEffect.dispose();
     if (this.blurPass) this.blurPass.dispose();
 
     if (this._resizeHandler) {

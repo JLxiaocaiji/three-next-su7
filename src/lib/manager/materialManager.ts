@@ -1336,46 +1336,45 @@ export class MaterialManager {
 
   // sm_simplecar
   public initSimpleCarMaterial(meshData: ModelMeshData): void {
-    meshData.meshes.forEach((item: THREE.Mesh) => {
-      let tempMatcapMaterial = new THREE.MeshMatcapMaterial({
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-      });
-      tempMatcapMaterial.onBeforeCompile = (t) => {
-        let n = t.fragmentShader;
-        let r = t.vertexShader;
+    let tempMatcapMaterial = new THREE.MeshMatcapMaterial({
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+    });
+    tempMatcapMaterial.onBeforeCompile = (t) => {
+      let n = t.fragmentShader;
+      let r = t.vertexShader;
 
-        // 插入变量：用于接收 世界坐标
-        r = r.replace(
-          '#include <common>',
-          `
+      // 插入变量：用于接收 世界坐标
+      r = r.replace(
+        '#include <common>',
+        `
             #include <common>
             varying vec3 vWorldPosition;
           `
-        );
+      );
 
-        // 模型的世界坐标
-        r = r.replace(
-          '#include <fog_vertex>',
-          `
+      // 模型的世界坐标
+      r = r.replace(
+        '#include <fog_vertex>',
+        `
             #include <fog_vertex>
             // 计算顶点的【世界坐标】并传递给片元着色器
             vWorldPosition = vec3(modelMatrix * vec4(position, 1.0));
           `
-        );
+      );
 
-        n = n.replace(
-          '#include <common>',
-          `
+      n = n.replace(
+        '#include <common>',
+        `
             #include <common>
             varying vec3 vWorldPosition;  // 接收世界坐标
           `
-        );
+      );
 
-        // 重写透明度计算，实现【左右渐隐】
-        n = n.replace(
-          'vec4 diffuseColor = vec4( diffuse, opacity );',
-          `
+      // 重写透明度计算，实现【左右渐隐】
+      n = n.replace(
+        'vec4 diffuseColor = vec4( diffuse, opacity );',
+        `
             // 计算新透明度：
             // abs(vWorldPosition.x)  -> 取 X轴世界坐标的绝对值（左右距离中心的长度）
             // /14.0                 -> 控制衰减范围（宽度14个单位）
@@ -1387,16 +1386,17 @@ export class MaterialManager {
             // 使用新的透明度 op 替换原来的 opacity
             vec4 diffuseColor = vec4(diffuse, op);
           `
-        );
-        t.vertexShader = r; // 覆盖顶点着色器
-        t.fragmentShader = n; // 覆盖片元着色器
-      };
+      );
+      t.vertexShader = r; // 覆盖顶点着色器
+      t.fragmentShader = n; // 覆盖片元着色器
+    };
 
+    meshData.meshes.forEach((item: THREE.Mesh) => {
       item.material = tempMatcapMaterial;
-
-      meshData.materials.m_simplecar = item.material; // Ag
       item.renderOrder = 10;
     });
+
+    meshData.materials.m_simpleCar = tempMatcapMaterial; // Ag
   }
 
   // 创建基础 MeshLambert 材质（非反光）
