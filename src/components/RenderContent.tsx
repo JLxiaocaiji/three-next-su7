@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
@@ -8,6 +8,9 @@ import { SceneManager } from '@/lib/manager/sceneManager';
 
 import { useIsSwapWidthAndHeight } from '@/hook/index';
 import { debounce } from '@/utils/index';
+
+import { useStore, cleanupAllStores } from '@/store/index';
+
 export default function ModelPage({
   setLoadingProgress,
 }: {
@@ -16,32 +19,47 @@ export default function ModelPage({
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('准备加载');
   const [models, setModels] = useState<Map<string, GLTF>>(new Map());
+  const [isSceneReady, setIsSceneReady] = useState(false);
 
   const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
+  const updateSizeRef = useRef<
+    ((isSwap: boolean, viewWidth: number, viewHeight: number) => void) | null
+  >(null);
 
   const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
-
-  const loadModel = async () => {
-    let percent = await sceneRef.current!.initLoad();
-    setLoadingProgress(percent);
-  };
 
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
     sceneRef.current = SceneManager.getInstance(containerRef.current as HTMLCanvasElement);
 
-    const { scene, renderer, camera, composer } = sceneRef.current;
+    requestAnimationFrame(() => {
+      setIsSceneReady(true);
+    });
+
+    updateSizeRef.current = debounce((isSwap: boolean, viewWidth: number, viewHeight: number) => {
+      if (!sceneRef.current) return;
+
+      const w = isSwap ? viewHeight : viewWidth;
+      const h = isSwap ? viewWidth : viewHeight;
+
+      if (w <= 0 || h <= 0) return;
+
+      sceneRef.current.resize(w, h, isSwap);
+    }, 100);
+
+    const loadModel = async () => {
+      const percent = await sceneRef.current!.initLoad();
+      setLoadingProgress(percent);
+    };
 
     loadModel();
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-    scene.add(ambientLight);
 
     sceneRef.current.startRender();
 
     return () => {
+      updateSizeRef.current = null;
       if (!sceneRef.current) return;
       const { scene } = sceneRef.current;
       scene.traverse((obj) => {
@@ -55,24 +73,21 @@ export default function ModelPage({
         }
       });
 
+      cleanupAllStores();
       sceneRef.current.dispose();
+      SceneManager.instance = null;
     };
-  }, []);
+  }, [setLoadingProgress]);
 
-  const updateSize = debounce(() => {
-    if (!sceneRef.current) return;
-
-    const w = isSwap ? viewHeight : viewWidth;
-    const h = isSwap ? viewWidth : viewHeight;
-
-    if (w <= 0 || h <= 0) return;
-
-    sceneRef.current.resize(w, h, isSwap);
-  }, 100);
+  const updateSize = useCallback(() => {
+    if (updateSizeRef.current && isSceneReady) {
+      updateSizeRef.current(isSwap, viewWidth, viewHeight);
+    }
+  }, [isSwap, viewWidth, viewHeight, isSceneReady]);
 
   useEffect(() => {
     updateSize();
-  }, [isSwap, viewWidth, viewHeight]);
+  }, [updateSize]);
 
   return (
     <>

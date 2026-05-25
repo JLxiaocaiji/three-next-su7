@@ -431,7 +431,7 @@ export class MaterialManager {
   public async initEnvironment(hdrName: string = 't_env_night'): Promise<void> {
     if (!this.ensureSceneManager() || !this._renderer || !this._scene) return;
 
-    let hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
+    const hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
 
     if (!hdrTexture) {
       console.warn(`MaterialManager: HDR 纹理 ${hdrName} 未在缓存中，尝试直接加载`);
@@ -1334,7 +1334,7 @@ export class MaterialManager {
     });
   }
 
-  // sm_simplecar
+  // sm_simpleCar
   public initSimpleCarMaterial(meshData: ModelMeshData): void {
     let tempMatcapMaterial = new THREE.MeshMatcapMaterial({
       transparent: true,
@@ -1358,7 +1358,6 @@ export class MaterialManager {
         '#include <fog_vertex>',
         `
             #include <fog_vertex>
-            // 计算顶点的【世界坐标】并传递给片元着色器
             vWorldPosition = vec3(modelMatrix * vec4(position, 1.0));
           `
       );

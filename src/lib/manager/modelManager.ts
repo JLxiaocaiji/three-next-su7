@@ -70,6 +70,38 @@ export interface MaterialOnlyModel {
   visibility: number;
 }
 
+// 点位数据（28个坐标）
+const points = [
+  [0.65, 1.04, -1.16],
+  [-0.35, 1.43, -0.69],
+  [1.08, 0.72, -1.01],
+  [1.95, 0.76, -1],
+  [-1.66, 1.34, 0],
+  [-1.95, 0.58, -1],
+  [0.35, 1.44, -0.08],
+  [0.26, 1.46, -0],
+  [2.53, 0.45, -0.64],
+  [2.73, 0.43, -0.3],
+  [2.78, 0.43, -0],
+  [-2.3, 0.67, -0.88],
+  [-2.72, 0.68, 0],
+  [-2.69, 0.62, -0.4],
+  [-2.24, 0.53, -0.94],
+  [0.65, 1.04, 1.16],
+  [-0.35, 1.43, 0.69],
+  [1.08, 0.72, 1.01],
+  [1.95, 0.76, 1],
+  [-1.95, 0.58, 1],
+  [0.35, 1.44, 0.08],
+  [2.53, 0.45, 0.64],
+  [2.73, 0.43, 0.3],
+  [-2.3, 0.67, 0.88],
+  [-2.69, 0.62, 0.4],
+  [-2.24, 0.53, 0.94],
+  [2.62, 0.43, 0.4],
+  [-2.69, 0.62, -0.4],
+];
+
 /**
  * 模型管理器
  * 加载、销毁、组织模型
@@ -89,10 +121,10 @@ export class ModelManager {
     { name: CacheKey.sm_carradar, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_curvature, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_linecar, priority: 2, suffix: '.bin' },
-    { name: CacheKey.sm_simplecar, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_simpleCar, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_size, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_speedup, priority: 2, suffix: '.bin' },
-    { name: CacheKey.sm_startroomraw, priority: 2, suffix: '.glb' },
+    { name: CacheKey.sm_startroom, priority: 2, suffix: '.glb' },
     { name: CacheKey.sm_windspeed, priority: 2, suffix: '.bin' },
   ];
   private loadedBytes: number = 0;
@@ -139,25 +171,29 @@ export class ModelManager {
   };
 
   // sm_size
-  public sizeModel: MaterialOnlyModel = {
+  public sizeModel: VisibilityMaterialModel = {
+    model: null,
     visibility: 0,
     materials: null,
   };
 
   // sm_curvature
-  public curvatureModel: MaterialOnlyModel = {
+  public curvatureModel: VisibilityMaterialModel = {
+    model: null,
     materials: null,
     visibility: 0,
   };
 
   // sm_windspeed
-  public windSpeedModel: MaterialOnlyModel = {
+  public windSpeedModel: VisibilityMaterialModel = {
+    model: null,
     visibility: 0,
     materials: null,
   };
 
   // sm_linecar
-  public linecarModel: MaterialOnlyModel = {
+  public linecarModel: VisibilityMaterialModel = {
+    model: null,
     visibility: 0,
     materials: null,
   };
@@ -165,6 +201,7 @@ export class ModelManager {
   // m_radarPoints 雷达点数据
   public carRadarPointModel = {
     visibility: 0,
+    materials: null as THREE.ShaderMaterial | null,
     instancedMesh: null as THREE.InstancedMesh | null,
   };
 
@@ -175,7 +212,7 @@ export class ModelManager {
     visibility: 0,
   };
 
-  // sm_simplecar
+  // sm_simpleCar
   private simpleCarData = {
     car1: null as THREE.Object3D | null,
     car2: null as THREE.Object3D | null,
@@ -189,18 +226,13 @@ export class ModelManager {
     this.fileList = this.fileConfigs
       .map((c) => ({
         ...c,
-        path: this.modelDir + c.name + c.suffix,
+        path: this.modelDir + (c.name === 'sm_startroom' ? 'sm_startroom.raw' : c.name) + c.suffix,
         isRawGlb: c.suffix === '.glb',
         isBin: c.suffix === '.bin',
       }))
       .sort((a, b) => a.priority - b.priority);
 
     this.initLoader();
-  }
-
-  private initManager() {
-    this.sceneManager = SceneManager.getInstance();
-    this.materialManager = MaterialManager.getInstance();
   }
 
   public static getInstance() {
@@ -372,8 +404,10 @@ export class ModelManager {
     const modelRoot = gltf.scene; // 拿到 3D 根节点
     modelRoot.userData.animations = gltf.animations || ([] as THREE.AnimationClip[]);
     modelRoot.userData.meshData = this.traverseAndCollectModelData(modelRoot) as ModelMeshData;
+    modelRoot.name = f.name;
 
     this.modelCache.set(f.name, modelRoot);
+    sceneConfig[f.name] = modelRoot;
     return modelRoot;
   }
 
@@ -625,7 +659,7 @@ export class ModelManager {
       value * this.carSpeedUp.lerpStrength
     );
 
-    for (let wheel of this.carSpeedUp.wheels?.children || []) {
+    for (const wheel of this.carSpeedUp.wheels?.children || []) {
       wheel.rotateZ(
         ((-this.carSpeedUp.currentVelocity * value) / (Math.PI * 0.737774)) * 2 * Math.PI
       );
@@ -645,6 +679,8 @@ export class ModelManager {
     if (!this.weiyiModel.model) return;
     this.weiyiModel.originPos.copy(this.weiyiModel.model.position);
     this.weiyiModel.originRotZ = this.weiyiModel.model.rotation.z;
+
+    this.setWeiYiPosition(0);
   }
 
   // 设置 weiyi 模型位置
@@ -670,13 +706,23 @@ export class ModelManager {
     const lightModel = this.modelCache.get('sm_car_lightbar' as CacheKey);
     if (!lightModel || !lightModel.userData.meshData?.materials) return;
 
-    // 保存模型 & 材质
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(lightModel);
+
     this.lightbarModel.model = lightModel;
     this.lightbarModel.materials = lightModel.userData.meshData.materials.lightbar_Baked;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+
+    this.sceneManager?.scene.add(lightModel);
+
     // 默认关闭灯光
-    this.lightbarModel.visibility = 0;
-    this.updateLightbarIntensity();
+    this.setLightbarVisibility(0);
+    this.lightbarModel.materials && (this.lightbarModel.materials.emissiveIntensity = 500 * 0 + 1);
   }
   private updateLightbarIntensity() {
     const { materials, visibility } = this.lightbarModel;
@@ -693,14 +739,21 @@ export class ModelManager {
     this.lightbarModel.visibility = value;
 
     // 立即更新材质亮度
-    this.updateLightbarIntensity();
+    // this.updateLightbarIntensity();
   }
 
   // 初始化 sm_size
   public initSizeModel() {
     const sizeModel = this.modelCache.get('sm_size' as CacheKey);
+
     if (!sizeModel || !sizeModel.userData.meshData?.materials) return;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(sizeModel);
+
+    this.sizeModel.model = sizeModel;
     // 保存材质
     this.sizeModel.materials = sizeModel.userData.meshData.materials;
 
@@ -710,26 +763,22 @@ export class ModelManager {
 
   // 设置 sm_size 显隐
   public setSizeVisibility(value: number) {
-    const sizeModel = this.modelCache.get('sm_size' as CacheKey);
-    const { materials } = this.sizeModel;
+    const { materials, model } = this.sizeModel;
 
-    if (!sizeModel || !materials) return;
+    if (!model || !materials) return;
 
     // 保存值
     this.sizeModel.visibility = value;
 
     // 控制模型显隐（>=0.005 显示）
-    sizeModel.visible = value >= 0.005;
+    model.visible = value >= 0.005;
 
     // 遍历所有材质更新透明度（兼容普通材质 + 着色器材质）
-    Object.values(materials).forEach((mat: any) => {
+    Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
-      // 如果是 ShaderMaterial，更新 uniforms
-      if (mat.isShaderMaterial) {
-        if (mat.uniforms?.opacity) {
-          mat.uniforms.opacity.value = value;
-        }
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.opacity) {
+        mat.uniforms.opacity.value = value;
       }
     });
   }
@@ -739,6 +788,12 @@ export class ModelManager {
     const model = this.modelCache.get('sm_curvature' as CacheKey);
     if (!model || !model.userData.meshData?.materials) return;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(model);
+
+    this.curvatureModel.model = model;
     this.curvatureModel.materials = model.userData.meshData.materials;
 
     // 初始化隐藏
@@ -746,8 +801,7 @@ export class ModelManager {
   }
 
   public setCurvatureVisibility(value: number) {
-    const model = this.modelCache.get('sm_curvature' as CacheKey);
-    const { materials } = this.curvatureModel;
+    const { materials, model } = this.curvatureModel;
 
     if (!model || !materials) return;
 
@@ -757,14 +811,12 @@ export class ModelManager {
     model.visible = value >= 0.005;
 
     // 更新所有材质透明度
-    Object.values(materials).forEach((mat: any) => {
+    Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
       // Shader材质兼容
-      if (mat.isShaderMaterial || mat.uniforms) {
-        if (mat.uniforms?.opacity != null) {
-          mat.uniforms.opacity.value = value;
-        }
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.opacity) {
+        mat.uniforms.opacity.value = value;
       }
     });
   }
@@ -774,6 +826,12 @@ export class ModelManager {
     const model = this.modelCache.get('sm_windspeed' as CacheKey);
     if (!model || !model.userData.meshData?.materials) return;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(model);
+
+    this.windSpeedModel.model = model;
     this.windSpeedModel.materials = model.userData.meshData.materials;
 
     // 默认隐藏
@@ -781,10 +839,14 @@ export class ModelManager {
   }
 
   public setWindSpeedVisibility(value: number) {
-    const model = this.modelCache.get('sm_windspeed' as CacheKey);
-    const { materials } = this.windSpeedModel;
+    const { materials, model } = this.windSpeedModel;
 
     if (!model || !materials) return;
+
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(model);
 
     // 保存当前值
     this.windSpeedModel.visibility = value;
@@ -793,11 +855,11 @@ export class ModelManager {
     model.visible = value >= 0.005;
 
     // 更新所有材质透明度
-    Object.values(materials).forEach((mat: any) => {
+    Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
       // 兼容 Shader 材质
-      if (mat.uniforms?.opacity != null) {
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.opacity != null) {
         mat.uniforms.opacity.value = value;
       }
     });
@@ -808,6 +870,12 @@ export class ModelManager {
     const model = this.modelCache.get('sm_linecar' as CacheKey);
     if (!model || !model.userData.meshData?.materials) return;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(model);
+
+    this.linecarModel.model = model;
     this.linecarModel.materials = model.userData.meshData.materials;
 
     // 默认隐藏
@@ -815,8 +883,7 @@ export class ModelManager {
   }
 
   public setLineCarVisibility(value: number) {
-    const model = this.modelCache.get('sm_linecar' as CacheKey);
-    const { materials } = this.linecarModel;
+    const { materials, model } = this.linecarModel;
 
     if (!model || !materials) return;
 
@@ -827,14 +894,12 @@ export class ModelManager {
     model.visible = value >= 0.005;
 
     // 遍历材质更新
-    Object.values(materials).forEach((mat: any) => {
+    Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       sceneConfig.u_car_discard.value = 1 - value;
 
-      // 透明度
       mat.opacity = value;
 
-      // Shader 材质兼容
-      if (mat.uniforms?.opacity != null) {
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.opacity) {
         mat.uniforms.opacity.value = value;
       }
     });
@@ -842,39 +907,7 @@ export class ModelManager {
 
   // sm_carradar
   public initCarRadarPointsModel() {
-    if (this.carRadarPointModel.instancedMesh) return;
-
-    // 点位数据（28个坐标）
-    const points = [
-      [0.65, 1.04, -1.16],
-      [-0.35, 1.43, -0.69],
-      [1.08, 0.72, -1.01],
-      [1.95, 0.76, -1],
-      [-1.66, 1.34, 0],
-      [-1.95, 0.58, -1],
-      [0.35, 1.44, -0.08],
-      [0.26, 1.46, -0],
-      [2.53, 0.45, -0.64],
-      [2.73, 0.43, -0.3],
-      [2.78, 0.43, -0],
-      [-2.3, 0.67, -0.88],
-      [-2.72, 0.68, 0],
-      [-2.69, 0.62, -0.4],
-      [-2.24, 0.53, -0.94],
-      [0.65, 1.04, 1.16],
-      [-0.35, 1.43, 0.69],
-      [1.08, 0.72, 1.01],
-      [1.95, 0.76, 1],
-      [-1.95, 0.58, 1],
-      [0.35, 1.44, 0.08],
-      [2.53, 0.45, 0.64],
-      [2.73, 0.43, 0.3],
-      [-2.3, 0.67, 0.88],
-      [-2.69, 0.62, 0.4],
-      [-2.24, 0.53, 0.94],
-      [2.62, 0.43, 0.4],
-      [-2.69, 0.62, -0.4],
-    ];
+    // if (this.carRadarPointModel.instancedMesh) return;
 
     const geometry = new THREE.PlaneGeometry(0.1, 0.1);
 
@@ -886,34 +919,39 @@ export class ModelManager {
 
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
 
     for (let i = 0; i < points.length; i++) {
       position.set(points[i][0], points[i][1], points[i][2]);
-      matrix.setPosition(position);
+      matrix.compose(position, rotation, scale);
       instancedMesh.setMatrixAt(i, matrix);
     }
 
     instancedMesh.instanceMatrix.needsUpdate = true;
 
     if (!this.sceneManager) {
-      console.error('sceneManager');
-      return;
+      this.sceneManager = SceneManager.getInstance();
     }
     this.sceneManager.scene.add(instancedMesh);
+
+    this.carRadarPointModel.instancedMesh = instancedMesh;
+    if (!pointMaterial) return;
+    this.carRadarPointModel.materials = pointMaterial;
 
     this.setRadarPointsVisibility(0);
   }
 
   // 0~1 控制雷达点显示/透明度
   public setRadarPointsVisibility(value: number) {
-    const { instancedMesh } = this.carRadarPointModel;
-    if (!instancedMesh) return;
+    const { instancedMesh, materials } = this.carRadarPointModel;
+    if (!instancedMesh || !materials) return;
 
     value = THREE.MathUtils.clamp(value, 0, 1);
     this.carRadarPointModel.visibility = value;
 
     instancedMesh.visible = value >= 0.005;
-    (instancedMesh.material as any).uniforms.opacity.value = value;
+    materials.uniforms.opacity.value = value;
   }
 
   // sm_carradar
@@ -922,6 +960,7 @@ export class ModelManager {
     if (!model || !model.userData.meshData?.materials) return;
 
     this.carRadarModel.materials = model.userData.meshData.materials;
+    this.carRadarModel.model = model;
 
     // 默认隐藏
     this.setCarRadarVisibility(0);
@@ -939,12 +978,10 @@ export class ModelManager {
 
     model.visible = value >= 0.005;
 
-    Object.values(materials).forEach((mat: any) => {
-      // 普通材质
+    Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
-      // 着色器材质（Wo = ShaderMaterial）
-      if (mat.uniforms?.opacity != null) {
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.opacity) {
         mat.uniforms.opacity.value = value;
       }
     });
@@ -952,24 +989,30 @@ export class ModelManager {
 
   // sm_simpleCar
   public initSimpleCarModel() {
-    const model = this.modelCache.get('sm_simplecar' as CacheKey);
+    const model = this.modelCache.get('sm_simpleCar' as CacheKey);
     if (!model || !model.userData.meshData?.materials) return;
 
     const car1 = model.children[0] as THREE.Object3D;
     const car2 = car1.clone();
     model.add(car2);
+    sceneConfig.sm_simpleCar.add(car2);
+
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager?.scene.add(model);
 
     this.simpleCarData.car1 = car1;
     this.simpleCarData.car2 = car2;
 
-    this.randomUpdate(this.simpleCarData.car1, this.simpleCarData.moveParams1);
-    this.randomUpdate(this.simpleCarData.car2, this.simpleCarData.moveParams2);
+    this.randomUpdate(this.simpleCarData.moveParams1, car1);
+    this.randomUpdate(this.simpleCarData.moveParams2, car2);
 
     this.setSimpleCarVisibility(0);
   }
 
   // 随机更新车辆方向、位置、速度
-  private randomUpdate(car: THREE.Object3D, params: THREE.Vector3) {
+  private randomUpdate(params: THREE.Vector3, car: THREE.Object3D) {
     // 随机左右方向
     params.x = Math.random() > 0.5 ? -1 : 1;
     // 随机纵向位置 2.5 ~ 5.5
@@ -981,46 +1024,37 @@ export class ModelManager {
   }
 
   public updateSimpleCar(deltaTime: number) {
-    const { car1, car2, length } = this.simpleCarData;
+    const { car1, car2, length, moveParams1, moveParams2 } = this.simpleCarData;
     if (!car1 || !car2) return;
 
     // 第一辆车移动逻辑
     const pos1 = car1.position;
-    pos1.x += deltaTime * this.simpleCarData.moveParams1.z * this.simpleCarData.moveParams1.x;
-    pos1.y = this.simpleCarData.moveParams1.y;
-
-    pos1.set(
-      pos1.x + deltaTime * this.simpleCarData.moveParams1.z * this.simpleCarData.moveParams1.x,
-      pos1.y,
-      this.simpleCarData.moveParams1.y
-    );
+    pos1.set(pos1.x + deltaTime * moveParams1.z * moveParams1.x, pos1.y, moveParams1.y);
 
     // 同步到全局 shader 变量
     sceneConfig.u_simpleCarCenter1.value.copy(pos1);
     // 越界重置
     if (Math.abs(pos1.x) > length) {
-      this.randomUpdate(car1, this.simpleCarData.moveParams1);
+      this.randomUpdate(this.simpleCarData.moveParams1, car1);
     }
 
     // 第二辆车移动逻辑
     const pos2 = car2.position;
 
-    pos2.set(
-      pos2.x + deltaTime * this.simpleCarData.moveParams2.z * this.simpleCarData.moveParams2.x,
-      pos1.y,
-      -this.simpleCarData.moveParams2.y
-    );
+    pos2.set(pos2.x + deltaTime * moveParams2.z * moveParams2.x, pos1.y, -moveParams2.y);
 
     sceneConfig.u_simpleCarCenter2.value.copy(pos2);
     // 越界重置
     if (Math.abs(pos2.x) > length) {
-      this.randomUpdate(car2, this.simpleCarData.moveParams2);
+      this.randomUpdate(this.simpleCarData.moveParams2, car2);
     }
   }
 
   public setSimpleCarVisibility(value: number): void {
-    const model = this.modelCache.get('sm_simplecar' as CacheKey);
+    const model = this.modelCache.get('sm_simpleCar' as CacheKey);
     if (!model) return;
+
+    this.simpleCarData.visibility = value;
 
     model.visible = value >= 0.005;
 

@@ -1,43 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { eventBus } from '@/utils/eventBus'; // 你的 mitt 事件总线
+import { useEffect, useState, useRef } from 'react';
+import { useScreenshotStore } from '@/store/useScreenshotStore';
+import { eventBus } from '@/utils/eventBus';
 
 export default function ScreenShot() {
-  // 控制显示/隐藏
-  const [visible, setVisible] = useState(false);
-  const [imageSrc, setImageSrc] = useState('');
-  const [width, setWidth] = useState(0);
-  const [height, setheight] = useState(0);
+  const { screenshot, setScreenshotVisible } = useScreenshotStore();
+
+  const imageSrc = screenshot?.picUrl || '';
+  const width = screenshot?.width || 0;
+  const height = screenshot?.height || 0;
+  const visible = screenshot?.visible || false;
 
   const hide = () => {
-    setVisible(false);
+    setScreenshotVisible(false);
     eventBus.emit('ScreenshotManager:hide', { duration: 1 });
   };
 
-  useEffect(() => {
-    const handleComplete = ({
-      picUrl,
-      width,
-      height,
-    }: {
-      picUrl: string;
-      width: number;
-      height: number;
-    }) => {
-      console.log(3333);
-      setImageSrc(picUrl);
-      setWidth(width);
-      setheight(height);
-      setVisible(true);
-    };
-    eventBus.on('ScreenshotManager:complete', handleComplete);
+  const handleLongPress = () => {
+    if (!imageSrc) return;
 
-    // 清理
-    return () => {
-      eventBus.off('ScreenshotManager:complete', handleComplete);
-    };
-  }, []);
+    const link = document.createElement('a');
+    link.href = imageSrc;
+    link.download = `screenshot-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <>

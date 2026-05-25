@@ -12,18 +12,13 @@ interface SpringCameraOptions {
   camera: THREE.PerspectiveCamera;
 }
 
-const _tempVec3 = new THREE.Vector3();
-const _tempEuler = new THREE.Euler();
-const _tempQuat1 = new THREE.Quaternion();
-const _tempQuat2 = new THREE.Quaternion();
-
 export class SpringCamera {
   public camera: THREE.PerspectiveCamera;
 
   private enablePositionNoise = true;
   private positionFrequency = 1.5;
   private positionAmplitude = 0.04;
-  private positionScale = new THREE.Vector3(1, 1, 1);
+  public positionScale = new THREE.Vector3(1, 1, 1);
   private positionFractalLevel = 3;
 
   // 内部状态
@@ -33,6 +28,11 @@ export class SpringCamera {
   private _lookAt = new THREE.Vector3(0, 0.23686, 0);
   public _rotation = new THREE.Euler(0, -Math.PI / 2, 0);
   readonly targetCameraPosition = new THREE.Vector3();
+
+  private _tempVec3 = new THREE.Vector3();
+  private _tempEuler = new THREE.Euler();
+  private _tempQuat1 = new THREE.Quaternion();
+  private _tempQuat2 = new THREE.Quaternion();
 
   constructor({
     near = 0.01,
@@ -99,8 +99,8 @@ export class SpringCamera {
     delay = 0
   ): Promise<boolean> {
     return new Promise((resolve, reject) => {
-      const startQuat = _tempQuat1.setFromEuler(this._rotation);
-      const endQuat = _tempQuat2.setFromEuler(targetRot);
+      const startQuat = new THREE.Quaternion().setFromEuler(this._rotation);
+      const endQuat = new THREE.Quaternion().setFromEuler(targetRot);
       const currentQuat = new THREE.Quaternion();
 
       gsap.killTweensOf(this);
@@ -155,13 +155,13 @@ export class SpringCamera {
   }
 
   calculateCameraPosition() {
-    _tempEuler.set(0, this.rotation.y, this.rotation.z);
-    _tempVec3
+    this._tempEuler.set(0, this.rotation.y, this.rotation.z);
+    this._tempVec3
       .set(1, 0, 0)
-      .applyEuler(_tempEuler)
+      .applyEuler(this._tempEuler)
       .multiplyScalar(this._springLength)
       .add(this._lookAt);
-    this.targetCameraPosition.copy(_tempVec3);
+    this.targetCameraPosition.copy(this._tempVec3);
   }
 
   // 每帧更新（requestAnimationFrame 中调用）
@@ -176,14 +176,14 @@ export class SpringCamera {
       this._time[i] += this.positionFrequency * delta;
     }
 
-    _tempVec3.set(
+    this._tempVec3.set(
       PerlinNoise.fbm(this.positionFractalLevel, this._time[0]),
       PerlinNoise.fbm(this.positionFractalLevel, this._time[1]),
       PerlinNoise.fbm(this.positionFractalLevel, this._time[2])
     );
 
-    _tempVec3.multiply(this.positionScale);
-    _tempVec3.multiplyScalar(this.positionAmplitude * this._fbmNorm);
-    this.camera.position.add(_tempVec3);
+    this._tempVec3.multiply(this.positionScale);
+    this._tempVec3.multiplyScalar(this.positionAmplitude * this._fbmNorm);
+    this.camera.position.add(this._tempVec3);
   }
 }

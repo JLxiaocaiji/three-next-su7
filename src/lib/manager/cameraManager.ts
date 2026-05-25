@@ -19,7 +19,7 @@ enum ViewState {
   State4 = 4,
 }
 const isInClickEffect = false;
-let currentShowingState: number = ViewState.State1;
+let currentShowingState: Module = ViewState.State1;
 
 let isTransitioning = true;
 

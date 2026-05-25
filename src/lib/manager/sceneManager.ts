@@ -18,13 +18,15 @@ import { ScreenshotManager } from './screenshotManager';
 import { BoxProjectionProbe } from '@/classes/BoxProjectionProbe';
 import { SpringCamera } from '@/classes/SpringCamera';
 import { CameraManager } from './cameraManager';
-import { CarMoveManager } from './carMoveManager';
+import { CarMotionManager } from './carMotionManager';
 import { sceneConfig } from './constantsConfig';
 import { isSupportMSAA } from '@/utils/index';
 import { MipBlurPass } from '@/classes/MipBlurPass';
 
 import { eventBus } from '@/utils/eventBus';
 import { CacheKey } from '@/types/index';
+
+import { useStore } from '@/store';
 
 export enum EnvMaps {
   t_env_night = 't_env_night',
@@ -48,11 +50,13 @@ export interface ModelGroup extends THREE.Group {
  * 渲染循环、相机、灯光
  */
 export class SceneManager {
-  private static instance: SceneManager | null = null;
+  public static instance: SceneManager | null = null;
   public readonly modelManager: ModelManager;
   public readonly materialManager: MaterialManager;
 
   public cameraManager: CameraManager | null = null;
+
+  public carMotionManager: CarMotionManager | null = null;
   // 反射
   public reflectManager: ReflectManager | null = null;
 
@@ -229,8 +233,8 @@ export class SceneManager {
   public async initLoad(): Promise<number> {
     this.materialManager.ensureSceneManager();
 
-    let modelTotalBytes = await this.modelManager.computeFileSize();
-    let materialTotalBytes = await this.materialManager.computeFileSize();
+    const modelTotalBytes = await this.modelManager.computeFileSize();
+    const materialTotalBytes = await this.materialManager.computeFileSize();
 
     const total = modelTotalBytes + materialTotalBytes;
     let modelLoaded = 0;
@@ -328,7 +332,7 @@ export class SceneManager {
 
     // sm_startroom
     const sm_startroomModelCache = this.modelManager.getCache(
-      'sm_startroom.raw' as CacheKey
+      'sm_startroom' as CacheKey
     ) as ModelGroup;
     const startroomMeshData = sm_startroomModelCache?.userData?.meshData as ModelMeshData;
     startroomMeshData && this.materialManager.initStartroomMaterial(startroomMeshData);
@@ -395,7 +399,7 @@ export class SceneManager {
 
     // sm_simpleCar
     const sm_simpleCarModelCache = this.modelManager.getCache(
-      'sm_simplecar' as CacheKey
+      'sm_simpleCar' as CacheKey
     ) as ModelGroup;
     const sm_simpleCarMeshData = sm_simpleCarModelCache?.userData?.meshData as ModelMeshData;
     sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
@@ -408,7 +412,7 @@ export class SceneManager {
 
     // sm_startroom -> reflectFloor 设置反射
     const sm_startroomModelCache = this.modelManager.getCache(
-      'sm_startroom.raw' as CacheKey
+      'sm_startroom' as CacheKey
     ) as ModelGroup;
 
     const reflectFloor = sm_startroomModelCache!.getObjectByName('ReflecFloor') as THREE.Mesh;
@@ -445,7 +449,6 @@ export class SceneManager {
     this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
 
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
-    console.log('carModelCache', carModelCache);
 
     // _ = new dO
     this.boxProjectionProbe = new BoxProjectionProbe(this.renderer, carModelCache);
@@ -486,30 +489,30 @@ export class SceneManager {
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
 
-    // const R = r.addNode(new $O(A,U))
+    // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
+    // const R = r.addNode(new $O(A, U));
+    this.carMotionManager = new CarMotionManager(carModelCache, this.cameraManager);
+    this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
 
-    // // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-    // const carMoveManager = new CarMoveManager(car, this.cameraManager);
-    // this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
+    // ne = r.addNode(cB)
+    this.modelManager.initWeiyiModel();
 
-    // // 找到 3D 模型里名字 = "WeiYi" 的子物体
-    // this.modelManager.initWeiyiModel();
-    // // sm_car_lightbar 灯光控制
-    // this.modelManager.initLightbarModel();
-    // // sm_size
-    // this.modelManager.initSizeModel();
-    // // sm_curvature
-    // this.modelManager.initCurvatureModel();
-    // // sm_windspeed
-    // this.modelManager.initWindspeedModel();
-    // // sm_linecar
-    // this.modelManager.initLinecarModel();
-    // // sm_carradar -> m_radarPoints
-    // this.modelManager.initCarRadarPointsModel();
-    // // sm_carradar
-    // this.modelManager.initCarradarModel();
-    // // sm_simpleCar
-    // this.modelManager.initSimpleCarModel();
+    // r.addNode(xB) sm_car_lightbar 灯光控制
+    this.modelManager.initLightbarModel();
+    //  r.addNode(eB) sm_size
+    this.modelManager.initSizeModel();
+    // r.addNode(tB) sm_curvature
+    this.modelManager.initCurvatureModel();
+    // r.addNode(nB) sm_windspeed
+    this.modelManager.initWindspeedModel();
+    // r.addNode(iB) sm_linecar
+    this.modelManager.initLinecarModel();
+    // r.addNode(lB) sm_carradar -> m_radarPoints
+    this.modelManager.initCarRadarPointsModel();
+    // r.addNode(rB) sm_carradar
+    this.modelManager.initCarradarModel();
+    // r.addNode(sB) sm_simpleCar
+    this.modelManager.initSimpleCarModel();
 
     // r.addPlugin(new K3({}))
     this.effect.bloomEffect = new BloomEffect({
@@ -706,24 +709,66 @@ export class SceneManager {
     // 监听模块切换
     eventBus.on('UI-RightContent:changeModule', ({ module: module }) => {
       console.log('UI-RightContent:changeModule', module);
+
+      if (module !== 4 && this.screenshotManager?._enabled) {
+        this.screenshotManager.hide();
+      }
+
       switch (module) {
         case 0:
           break;
         case 4:
-          this.screenshotManager && this.screenshotManager.show(0.5);
+          this.screenshotManager!.show(0.5);
           break;
       }
     });
 
     // 监听隐藏指令
     eventBus.on('ScreenshotManager:hide', (data) => {
-      this.screenshotManager && this.screenshotManager.hide(data?.duration ?? 0.5);
+      this.screenshotManager!.hide(data?.duration ?? 0.5);
     });
 
     // 监听截图指令
-    eventBus.on('ScreenshotManager:screenshot', async () => {
-      this.screenshotManager && this.screenshotManager.screenshot();
-    });
+    // eventBus.on('ScreenshotManager:screenshot', async () => {
+    //   this.screenshotManager!.screenshot();
+    // });
+  }
+
+  public screenshot(): void {
+    this.screenshotManager!.screenshot();
+  }
+
+  public getCurrentModule(module?: Module): void {
+    this.carMotionManager?.getCurrentModule(module);
+  }
+
+  public showModel(duration: number = 1, delay: number = 0) {
+    // 先停止旧动画
+    // gsap.killTweensOf(this.windModel);
+    // gsap.to(this.windModel, {
+    //   duration: duration,
+    //   delay: delay,
+    //   visibility: 1,
+    //   ease: 'power2.inOut', // 对应 Cubic.InOut
+    //   onUpdate: () => {
+    //     // 动画每帧更新透明度
+    //     this.setWindVisibility(this.windModel.visibility);
+    //   },
+    // });
+  }
+
+  // 淡出（1 → 0）
+  public hideModel(duration: number = 1, delay: number = 0) {
+    // gsap.killTweensOf(this.windModel);
+    // gsap.to(this.windModel, {
+    //   duration: duration,
+    //   delay: delay,
+    //   visibility: 0,
+    //   ease: 'power2.inOut',
+    //   onUpdate: () => {
+    //     this.setWindVisibility(this.windModel.visibility);
+    //   },
+    // });
   }
 
   // 解析 url, "custom"自定义颜色，字符串数字颜色索引，0默认颜色
@@ -813,6 +858,9 @@ export class SceneManager {
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
     }
+
+    // 截屏
+    this.screenshotManager!.dispose();
 
     if (this.gui) {
       this.gui.destroy();

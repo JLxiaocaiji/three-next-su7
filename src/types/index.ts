@@ -5,9 +5,9 @@ export enum CacheKey {
   sm_carradar = 'sm_carradar',
   sm_curvature = 'sm_curvature',
   sm_linecar = 'sm_linecar',
-  sm_simplecar = 'sm_simplecar',
+  sm_simpleCar = 'sm_simpleCar',
   sm_size = 'sm_size',
   sm_speedup = 'sm_speedup',
-  sm_startroomraw = 'sm_startroom.raw',
+  sm_startroom = 'sm_startroom',
   sm_windspeed = 'sm_windspeed',
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useStore } from '@/store';
 import * as THREE from 'three';
 import { hsvaToRgbaString } from '@uiw/color-convert';
 import { Hue, Saturation, ShadeSlider, Alpha, Slider } from '@uiw/react-color';
@@ -25,26 +26,15 @@ const custom = {
   metal: 0.1,
 };
 export default function LeftCustomization({ part }: { part: number }) {
-  const [isVisible, setIsVisible] = useState(false);
-
   const [hsva, setHsva] = useState({ h: 0, s: 0, v: 0, a: 1 });
 
   const [color, setColor] = useState('#4a86ff');
 
   const [value, setValue] = useState(20);
 
-  // 接收来自 3D 类的截图结果反馈
-  useEffect(() => {
-    eventBus.on('UI-RightContent:changeModule', ({ module: module }) => {
-      if (module === 4) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    });
+  const currentModule = useStore((state) => state.currentModule);
 
-    return () => eventBus.off('UI-RightContent:changeModule', () => setIsVisible(false));
-  }, []);
+  const isVisible = currentModule === 4;
 
   return (
     <>

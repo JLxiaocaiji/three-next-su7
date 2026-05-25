@@ -11,19 +11,6 @@ export default function LeftCustomization({ part }: { part: number }) {
 
   const [hsva, setHsva] = useState({ h: 0, s: 100, v: 100, a: 1 });
 
-  // 接收来自 3D 类的截图结果反馈
-  useEffect(() => {
-    eventBus.on('UI-RightContent:changeModule', ({ module: module }) => {
-      if (module === 4) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    });
-
-    return () => eventBus.off('UI-RightContent:changeModule', () => setIsVisible(false));
-  }, []);
-
   return (
     <>
       {isVisible && (
