@@ -28,8 +28,14 @@ export class BoxProjectionProbe {
     this._renderer = renderer;
     this._node = node;
 
-    this.boundingBox = this.boundingBox.setFromObject(this._node);
-    if (this.probeBox && this.probeBox.isEmpty()) {
+    const worldMatrix = this._node.matrixWorld.clone();
+    this._node.matrixWorld.identity();
+    this.boundingBox.setFromObject(this._node);
+    this._node.matrixWorld.copy(worldMatrix);
+    this._node.updateMatrixWorld(true);
+
+    // 2. 如果probeBox为空，复制boundingBox
+    if (this.probeBox.isEmpty()) {
       this.probeBox.copy(this.boundingBox);
     }
 
@@ -85,7 +91,7 @@ export class BoxProjectionProbe {
   set debug(value: boolean) {
     this._debug = value;
 
-    // 原生Three.js调试：创建/显示包围盒辅助线（替代原viewer事件）
+    // 原生Three.js调试：创建/显示包围盒辅助线
     if (value) {
       if (!this.boxHelper) {
         this.boxHelper = new THREE.Box3Helper(this.probeBox, 0xffff00);

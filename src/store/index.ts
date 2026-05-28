@@ -5,7 +5,12 @@ import { immer } from 'zustand/middleware/immer';
 import { eventBus } from '@/utils/eventBus';
 import { SceneManager } from '@/lib/manager/sceneManager';
 
-type Module = 0 | 1 | 2 | 3 | 4;
+type Module = 0 | 1 | 2 | 3 | 4 | 5;
+
+enum ColorParamType {
+  custom = 1,
+  preset = 2,
+}
 
 interface State {
   user: { name: string };
@@ -15,8 +20,6 @@ interface State {
   currentModule: Module;
   setCurrentModule: (module: Module) => void;
 
-  // CarMotionManager
-
   cleanup: () => void;
 }
 
@@ -24,25 +27,6 @@ export const useStore = create<State>()(
   immer(
     persist(
       (set, get) => {
-        // 获得当前模块
-        const getCurrentModule = () => {
-          const currentModule = get().currentModule;
-          eventBus.emit('Store:returnModule', { module: currentModule });
-        };
-        eventBus.off('CarMotionManager:getCurrentModule', getCurrentModule);
-        eventBus.on('CarMotionManager:getCurrentModule', getCurrentModule);
-
-        // 更改模块
-        const changeModule = ({ module: module }: { module: Module }) => {
-          set((state) => {
-            state.currentModule = module;
-            const sceneManager = SceneManager.getInstance();
-            sceneManager.getCurrentModule(module);
-          });
-        };
-        eventBus.off('UI-RightContent:changeModule', changeModule);
-        eventBus.on('UI-RightContent:changeModule', changeModule);
-
         return {
           user: { name: '' },
           // 状态
@@ -59,10 +43,7 @@ export const useStore = create<State>()(
               state.currentModule = module;
             }),
 
-          cleanup: () => {
-            eventBus.off('UI-RightContent:changeModule', changeModule);
-            eventBus.off('Store:returnModule', getCurrentModule);
-          },
+          cleanup: () => {},
         };
       },
       // persist 配置
@@ -78,8 +59,35 @@ export const useStore = create<State>()(
   )
 );
 
+const store = useStore.getState();
+
+// 获取当前模块
+const getCurrentModule = () => {
+  const currentModule = store.currentModule;
+  eventBus.emit('GetCurrentModule', { module: currentModule });
+};
+eventBus.off('GetCurrentModule', getCurrentModule);
+eventBus.on('GetCurrentModule', getCurrentModule);
+
+// 更改模块
+const changeModule = ({ module: module }: { module: Module }) => {
+  store.setCurrentModule(module);
+
+  const sceneManager = SceneManager.getInstance();
+  sceneManager.handleModuleChange(module);
+};
+eventBus.off('ChangeModule', changeModule);
+eventBus.on('ChangeModule', changeModule);
+
+useStore.setState({
+  cleanup: () => {
+    eventBus.off('ChangeModule', changeModule);
+    eventBus.off('GetCurrentModule', getCurrentModule);
+  },
+});
+
 export const cleanupAllStores = () => {
-  useStore.getState().cleanup();
+  store.cleanup();
   import('./useScreenshotStore').then(({ useScreenshotStore }) => {
     useScreenshotStore.getState().cleanup();
   });

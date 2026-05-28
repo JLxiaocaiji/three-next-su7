@@ -9,8 +9,10 @@ import {
   RenderPass,
 } from 'postprocessing';
 import type * as DatGUIType from 'dat.gui';
+import gsap from 'gsap';
 
 import { ModelManager } from './modelManager';
+// import type { PositionRotationModel, VisibilityMaterialModel, SimpleModel } from './modelManager';
 import { MaterialManager } from './materialManager';
 import { ReflectManager } from '@/classes/ReflectManager';
 import { EnvironmentManager } from '@/classes/Environment';
@@ -45,6 +47,11 @@ export interface ModelGroup extends THREE.Group {
   };
 }
 
+enum ColorParamType {
+  preset = 0,
+  custom = 1,
+}
+
 /**
  * 场景管理:
  * 渲染循环、相机、灯光
@@ -66,7 +73,7 @@ export class SceneManager {
   public springCamera: SpringCamera | null = null;
   public readonly renderer: THREE.WebGLRenderer;
   public sizes: { width: number; height: number; pixelRatio: number; factor?: number };
-  public readonly controls: OrbitControls;
+  // public readonly controls: OrbitControls;
 
   // 立体相机
   public cubeCamera: THREE.CubeCamera | null = null;
@@ -116,6 +123,11 @@ export class SceneManager {
   // 当前模型缓存
   private currentModelCache: THREE.Group[] = [];
 
+  private currentColorIndex: 'custom' | string | 0 = '00';
+
+  // 固定temp
+  // private _tempColor = new THREE.Color();
+
   private constructor(canvas: HTMLCanvasElement) {
     if (typeof window === 'undefined') {
       throw new Error('只能在浏览器环境中初始化，请确保在 useEffect 中调用 getInstance');
@@ -157,16 +169,16 @@ export class SceneManager {
 
     this.timer = new THREE.Timer();
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
+    // this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    // this.controls.enableDamping = true;
+    // this.controls.dampingFactor = 0.05;
 
     const axesHelper = new THREE.AxesHelper(5);
     this.scene.add(axesHelper);
 
     this.initPostProcessing();
     // this._initResizeHandler();
-    this._initGUI();
+    this.initGui();
 
     this.modelManager = ModelManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
@@ -182,11 +194,11 @@ export class SceneManager {
     return SceneManager.instance;
   }
 
-  private async _initGUI(): Promise<void> {
+  private async initGui(): Promise<void> {
     if (this._guiInitialized || typeof window === 'undefined') return;
 
     try {
-      // 动态导入 dat.gui（仅在客户端执行）
+      // 动态导入 dat.gui
       const dat = await import('dat.gui');
       this.gui = new dat.GUI();
       this._guiInitialized = true;
@@ -267,27 +279,27 @@ export class SceneManager {
       console.error('模型加载失败', err);
       return percent;
     } finally {
-      this.prepareScene();
-
       /*
        初始化加载 t_env_night.hdr、t_env_light.hdr
        */
-      const t_env_night = this.materialManager.getCache('t_env_night') ?? null;
-      const t_env_light = this.materialManager.getCache('t_env_light') ?? null;
-      this.envMaps = {
-        t_env_night,
-        t_env_light,
-      };
+      // const t_env_night = this.materialManager.getCache('t_env_night') ?? null;
+      // const t_env_light = this.materialManager.getCache('t_env_light') ?? null;
+      // this.envMaps = {
+      //   t_env_night,
+      //   t_env_light,
+      // };
+      // await this.materialManager.initEnvironment('t_env_light');
 
-      await this.materialManager.initEnvironment('t_env_night');
+      // console.log('t_env_night mapping:', t_env_night.mapping); // 应该输出300（EquirectangularReflectionMapping）
+      // console.log('t_env_night is CubeTexture:', t_env_night instanceof THREE.CubeTexture);
 
+      await this.prepareScene();
       await this.createScene();
-
       this.compileScene();
     }
   }
 
-  public prepareScene(): void {
+  public async prepareScene(): Promise<void> {
     // r.addNode(uB)  // 挂载音频
     // r.addNode(mM)  // 显示UI状态， 状态 1
 
@@ -365,6 +377,7 @@ export class SceneManager {
     // sm_curvature -> 曲率
     const sm_curvatureMesh = sm_curvatureMeshData.meshes.find((item) => item.name === '曲率');
 
+    console.log('sm_curvatureMeshData:', sm_curvatureMeshData);
     // m.name == "曲率" && (m.material = NO,
     // _.materials.m_curvature = m.material,
     // m.layers.enable(Ae.LAYER_CAPTURE))
@@ -407,8 +420,7 @@ export class SceneManager {
 
   public async createScene(): Promise<void> {
     this.screenshotManager = new ScreenshotManager(this.renderer, this.scene, this.camera);
-
-    this.scene.background = new THREE.Color(0, 0, 0);
+    this.scene.background = new THREE.Color(0, 0, 0); // 与 initEnvironment 搭配
 
     // sm_startroom -> reflectFloor 设置反射
     const sm_startroomModelCache = this.modelManager.getCache(
@@ -422,7 +434,6 @@ export class SceneManager {
         this.camera,
         this.renderer,
         this.scene,
-
         reflectFloor,
         new THREE.Vector2(1024, 1024),
         29,
@@ -430,18 +441,18 @@ export class SceneManager {
       );
     }
 
-    // sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager.reflectMatrix;
-    // sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager.reflectTexture;
+    // sceneConfig.u_reflect.u_reflectMatrix.value = this.reflectManager!.reflectMatrix;
+    // sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager!.reflectTexture;
 
     // 创建环境贴图管理器
-    // new YO(Ae.ut_env_night.value,Ae.ut_env_light.value)
+    // new YO(Ae.ut_env_night.value, Ae.ut_env_light.value);
     this.envManager = new EnvironmentManager(
       this.renderer,
       this.scene,
       sceneConfig.ut_env_night.value as THREE.Texture,
       sceneConfig.ut_env_light.value as THREE.Texture
     );
-    this.envManager.setState(2);
+
     // 设置 起始房间 发光材质设置
     // l = r.addNode(Ae.sm_startroom)
     this.scene.add(sm_startroomModelCache);
@@ -474,13 +485,15 @@ export class SceneManager {
       camera: this.camera,
     });
 
+    // 抖动
+    this.springCamera.enablePositionNoise = false;
+
+    // D = r.addNode(new Hl({
     this.cameraManager = new CameraManager(
       this.springCamera,
       this.renderer.domElement,
       this.camera
     );
-
-    this.cameraManager.enableControlCamera = true;
 
     /**
      * 点击绑定事件
@@ -535,7 +548,7 @@ export class SceneManager {
     // this._springCtr = U  // this.cameraManager
     // this._carLightController = m  // this.materialManager.initCarLightMaterial(car);
     // this._topLightController = g  // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache)
-    // this._carSpeedUpdate = R // const carMoveManager = new CarMoveManager(car, this.cameraManager);
+    // this._carSpeedUpdate = R // this.carMotionManager = new CarMotionManager(carModelCache, this.cameraManager);
 
     // this._bloom = Pe   // new K3  // this.effect.bloomEffect
     // this._projectionProbe = _  // _ = new dO()    // this.boxProjectionProbe
@@ -553,13 +566,14 @@ export class SceneManager {
     // };
 
     // eventBus
-    this.setupBusListeners();
+    // this.setupBusListeners();
     // this.eventRegister();  // eventRegister.ts
   }
 
   public compileScene() {
     // BO()  共享材质
-    const model = this.modelManager.getCache('sm_simplecar' as CacheKey);
+    const model = this.modelManager.getCache('sm_simpleCar' as CacheKey);
+
     if (!model) return;
     let tempMaterial = model.userData.meshData.materials.m_simpleCar as THREE.MeshMatcapMaterial;
     tempMaterial.matcap = sceneConfig.ut_scar_matcap.value;
@@ -567,23 +581,449 @@ export class SceneManager {
 
     // this.viewer.compile()
     // A, m, D, U: this._renderer, this._scene, this._camera, this._scene
-    this.renderer.compile(this.scene, this.camera);
+    // this.renderer.compile(this.scene, this.camera);
 
-    // Ie.emit(Ie.PRELOADED);  对应 eventBus; eventBus.emit('PRELOADED');
-    /**
-     * this.on(this.PRELOADED, () => {
-            this.emit(this.UPDATESHOWINGSTATE, 1)
-        }
-        currentModule = 1;
-     */
+    // Ie.emit(Ie.PRELOADED);  on(PRELOADED, () => { emit(this.ChangeModule, 1) }
+    eventBus.emit('ChangeModule', { module: 0 });
+
     /**
      * jU(): 显示一个平滑动画的加载进度条 → 加载完成后自动渐隐消失 → 消失后播放背景音乐 audioManager
      */
 
     // let r = Ae.getCustomParams()
     const r = this.getCustomParams();
+    if (r) eventBus.emit('ChangeColor', { param: r });
+  }
 
-    // r && Ie.emit(Ie.CHANGECOLOR, r)
+  // 模块切换处理 eventBus.on('UPDATESHOWINGSTATE')
+  handleModuleChange(module?: Module): void {
+    // 车移动模块获取 moduel 用于 update
+    this.carMotionManager?.getCurrentModule(module);
+
+    // 隐藏所有配件
+    this.hideAllAccessories();
+
+    this.screenshotManager?.hide();
+    // g.targetVelocity = 0
+    this.carMotionManager!.targetVelocity = 0;
+    this.cameraManager!.setNewRange();
+    // xe.copy(Ae.u_floorLightMapColor.value)
+
+    // const r = this._envController,   // this.envManager
+    //   s = this._springCtr,           // this.cameraManager
+    //   h = this._carLightController,  // this.materialManager.initCarLightMaterial
+    //   l = this._topLightController,  // this.materialManager.initStartroomLightMaterial
+    //   g = this._carSpeedUpdate,      // this.carMotionManager
+    //   _ = this._bloom,               // this.effect.bloomEffect
+    //   A = this._projectionProbe,     // this.boxProjectionProbe
+    //   m = this._accessories;
+    //   D                              // transitionModuel
+
+    switch (module) {
+      case 0:
+        this.handleBeginAnimation();
+        this.cameraManager!.enableControlCamera = false;
+        break;
+
+      case 1:
+        this.cameraManager?.setNewTarget(
+          new THREE.Vector3(0, 0.8, 0),
+          7,
+          new THREE.Euler(0, Math.PI * 0.5, 0)
+        );
+        // this.transitionModuel();
+        this.cameraManager!.targetFov = 33.4;
+        break;
+    }
+  }
+
+  // 场景过渡
+  public transitionModuel(
+    floorLightIntensity: number = 1,
+    carEnvIntensity: number = 1,
+    sceneExposure: number = 1,
+    topLightOpacity: number = 1,
+    luminanceSmooth: number = 1.8
+  ): void {
+    gsap.killTweensOf([
+      this.boxProjectionProbe,
+      sceneConfig.u_floorLightMapIntensity,
+      sceneConfig.u_car_envMapIntensity,
+      this.envManager,
+      this.materialManager,
+      this.effect.bloomEffect,
+    ]);
+
+    if (!this.boxProjectionProbe) {
+      console.error('boxProjectionProbe is null');
+      return;
+    }
+    const boxProjectionProbe = this.boxProjectionProbe;
+    gsap.to(this.boxProjectionProbe, {
+      duration: 1,
+      ease: 'power3.inOut',
+      probeCenter: new THREE.Vector3(0, 0, 0),
+      probeBoxMax: new THREE.Vector3(3.6, 3, 1.5),
+      onUpdate: () => {
+        boxProjectionProbe.probeCenter = boxProjectionProbe.probeCenter;
+      },
+    });
+
+    gsap.to(sceneConfig.u_floorLightMapIntensity, {
+      duration: 1,
+      value: floorLightIntensity,
+    });
+
+    gsap.to(sceneConfig.u_car_envMapIntensity, {
+      duration: 1.5,
+      ease: 'power3.inOut',
+      value: carEnvIntensity,
+    });
+
+    gsap.to(this.envManager, {
+      duration: 1,
+      exposure: sceneExposure,
+    });
+
+    gsap.to(this.materialManager.startroomLightMaterial, {
+      duration: 0.5,
+      opacity: topLightOpacity,
+    });
+
+    gsap.to(this.effect.bloomEffect, {
+      duration: 2,
+      luminanceSmoothing: luminanceSmooth,
+    });
+  }
+
+  // 隐藏所有配件
+  public hideAllAccessories(): void {
+    // this.accessories = {
+    //   s1_c: ne,      // ne = r.addNode(cB) // this.modelManager.initWeiyiModel();
+    //   s1_cpcl: ce,   // ce = r.addNode(xB) // this.modelManager.initLightbarModel();
+    //   s2_b: xe,      // xe = r.addNode(eB) // this.modelManager.initSizeModel();
+    //   s2_c: Se,      // Se = r.addNode(tB) // this.modelManager.initCurvatureModel()
+    //   s3_b: $,       // $ = r.addNode(nB)  // this.modelManager.initWindspeedModel();
+    //   s3_c: q,       // q = r.addNode(iB)  // this.modelManager.initLinecarModel();
+    //   s4_b: N,       // N = r.addNode(lB)  // this.modelManager.initCarRadarPointsModel()
+    //   s4_c: ie,      // ie = r.addNode(rB) // this.modelManager.initCarradarModel();
+    //   s4_cSC: _e,    // _e = r.addNode(sB) // this.modelManager.initSimpleCarModel();
+    // };
+
+    const arr = [
+      {
+        model: this.modelManager.weiyiModel,
+        func: (val: number) => this.modelManager.setWeiYiPosition(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.lightbarModel,
+        func: (val: number) => this.modelManager.setLightbarVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.sizeModel,
+        func: (val: number) => this.modelManager.setSizeVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.curvatureModel,
+        func: (val: number) => this.modelManager.setCurvatureVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.windSpeedModel,
+        func: (val: number) => this.modelManager.setWindSpeedVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.linecarModel,
+        func: (val: number) => this.modelManager.setLineCarVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.carRadarPointModel,
+        func: (val: number) => this.modelManager.setRadarPointsVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.carRadarPointModel,
+        func: (val: number) => this.modelManager.setRadarPointsVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.simpleCarData,
+        func: (val: number) => this.modelManager.setSimpleCarVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+    ];
+    arr.forEach((item) => {
+      this.modelManager.hideModel(item.model, item.func, item.duration, item.delay);
+    });
+
+    // console.log('this.modelManager.weiyiModel', this.modelManager.weiyiModel);
+    // console.log('this.modelManager.lightbarModel', this.modelManager.lightbarModel);
+    // console.log('this.modelManager.sizeModel', this.modelManager.sizeModel);
+    // console.log('this.modelManager.curvatureModel', this.modelManager.curvatureModel);
+    // console.log('this.modelManager.windSpeedModel', this.modelManager.windSpeedModel);
+    // console.log('this.modelManager.linecarModel', this.modelManager.linecarModel);
+    // console.log('this.modelManager.carRadarPointModel', this.modelManager.carRadarPointModel);
+    // console.log('this.modelManager.carRadarPointModel', this.modelManager.carRadarPointModel);
+    // console.log('this.modelManager.simpleCarData', this.modelManager.simpleCarData);
+  }
+
+  // 开场动画
+  public handleBeginAnimation() {
+    const black = new THREE.Color(0x000000);
+    const green = new THREE.Color('#C9D573');
+    const white = new THREE.Color(0xffffff);
+    const tempColor1 = new THREE.Color();
+    const tempColor2 = new THREE.Color();
+    // 当前地板光颜色
+    tempColor2.copy(sceneConfig.u_floorLightMapColor.value);
+
+    if (!this.envManager) {
+      console.error('envManager is null');
+      return;
+    }
+
+    // 环境状态切换
+    gsap.killTweensOf(this.envManager);
+    gsap
+      .timeline()
+      .delay(1.5)
+      .call(() => {
+        this.envManager!.setState(1, 2.5, 'power3.easeIn');
+        this.cameraManager!.gotoPOI(
+          new THREE.Vector3(0, 0.8, 0),
+          7,
+          new THREE.Euler(0, Math.PI * 0.5, 0),
+          4,
+          true
+        ).then(() => {
+          const r = this.getCustomParams();
+          console.log('r', r);
+
+          if (r === 'custom') {
+            eventBus.emit('ChangeModule', { module: 5 });
+            eventBus.emit('ChangeUIColorParam', { paramType: ColorParamType.custom });
+          } else if (r) {
+            eventBus.emit('ChangeModule', { module: 5 });
+            eventBus.emit('ChangeUIColorParam', { paramType: ColorParamType.preset });
+          } else {
+            eventBus.emit('ChangeModule', { module: 1 });
+          }
+
+          console.log('this.cameraManager', this.cameraManager);
+
+          // this.cameraManager!.enableControlCamera = true;
+        });
+      })
+      .delay(2.5)
+      .call(() => {
+        this.envManager!.setState(2, 4, 'power3.easeOut');
+      });
+
+    // 顶灯颜色渐变
+    const startroomLightMaterial = this.materialManager.startroomLightMaterial;
+    if (!startroomLightMaterial) {
+      console.error('this.materialManager.startroomLightMaterial is null');
+      return;
+    }
+    const topLightAnim = { progress: 0 };
+    gsap.killTweensOf(startroomLightMaterial);
+    gsap
+      .timeline({ delay: 1.5 })
+      .to(topLightAnim, {
+        progress: 1,
+        duration: 2.5,
+        onUpdate: () => {
+          tempColor1.copy(black).lerp(green, topLightAnim.progress);
+          startroomLightMaterial.emissive.copy(tempColor1);
+          startroomLightMaterial.emissiveIntensity = topLightAnim.progress * 0.4;
+        },
+        ease: 'power3.easeIn',
+      })
+      .set(topLightAnim, { progress: 0 })
+      .to(topLightAnim, {
+        progress: 1,
+        duration: 2,
+        ease: 'none',
+        onUpdate: () => {
+          tempColor1.copy(green).lerpHSL(white, topLightAnim.progress);
+          startroomLightMaterial!.emissive.copy(tempColor1);
+          startroomLightMaterial!.emissiveIntensity = topLightAnim.progress * 2.3 + 0.4;
+        },
+      });
+
+    // 车灯渐亮
+    const carlight = this.materialManager.carlight;
+    if (!carlight) return;
+    gsap.killTweensOf(carlight);
+    gsap.to(carlight, {
+      carlightValue: 1,
+      duration: 1,
+      delay: 1,
+      ease: 'power3.easeIn',
+    });
+
+    // 地板光颜色渐变
+    const floorLightAnim = { progress: 0 };
+    gsap.killTweensOf(sceneConfig.u_floorLightMapIntensity);
+    gsap
+      .timeline({ delay: 1.5 })
+      .to(sceneConfig.u_floorLightMapIntensity, {
+        value: 0.1,
+        duration: 2.5,
+        ease: 'power3.easeIn',
+      })
+      .to(
+        floorLightAnim,
+        {
+          progress: 1,
+          duration: 2.5,
+          ease: 'power3.in',
+          onUpdate: () => {
+            tempColor1.copy(tempColor2).lerpHSL(green, floorLightAnim.progress);
+            sceneConfig.u_floorLightMapColor.value.copy(tempColor1);
+          },
+        },
+        '<'
+      )
+      .to(sceneConfig.u_floorLightMapIntensity, {
+        value: 1,
+        duration: 2,
+        ease: 'none',
+      })
+      .set(floorLightAnim, { progress: 0 })
+      .to(
+        floorLightAnim,
+        {
+          progress: 1,
+          duration: 2,
+          ease: 'none',
+          onUpdate: () => {
+            tempColor1.copy(green).lerpHSL(white, floorLightAnim.progress);
+            sceneConfig.u_floorLightMapColor.value.copy(tempColor1);
+          },
+        },
+        '<'
+      );
+
+    console.log('sceneConfig.u_floorLightMapColor', sceneConfig.u_floorLightMapColor);
+    console.log('sceneConfig.u_floorLightMapColor', sceneConfig.u_floorLightMapColor);
+    sceneConfig.u_floorLightMapColor.value = new THREE.Color('#ffffff');
+
+    // // 地板反射强度
+    gsap.killTweensOf(sceneConfig.u_floorReflectIntensity);
+    gsap
+      .timeline({ delay: 1.8 })
+      .to(sceneConfig.u_floorReflectIntensity, { value: 0.1, duration: 1.5, ease: 'power3.easeIn' })
+      .to(sceneConfig.u_floorReflectIntensity, { value: 1, duration: 1.5, ease: 'power1.inOut' });
+  }
+
+  // 解析 url, "custom"自定义颜色，字符串数字颜色索引，0默认颜色
+  getCustomParams(): 'custom' | string | 0 {
+    const urlParams = new URLSearchParams(window.location.search);
+    const vParam = urlParams.get('v');
+
+    // 格式 1：RRGGBB + 粗糙度(2位) + 金属度(2位)
+    if (vParam && vParam.length === 10) {
+      const colorHex = vParam.slice(0, 6);
+      const roughHex = vParam.slice(6, 8);
+      const metalHex = vParam.slice(8, 10);
+
+      // 解析为0-1范围的浮点数
+      const roughness = parseInt(roughHex, 16) / 255;
+      const metalness = parseInt(metalHex, 16) / 255;
+
+      const customColor = sceneConfig.colors.get('custom');
+      if (!customColor) {
+        return 0;
+      }
+
+      if (roughness >= 0) customColor.rough = roughness;
+      if (metalness >= 0) customColor.metal = metalness;
+
+      if (colorHex && /^[0-9A-Fa-f]{6}$/.test(colorHex)) {
+        const baseColor = new THREE.Color(`#${colorHex}`);
+        customColor.col.copy(baseColor);
+        baseColor.convertLinearToSRGB();
+        // 计算并存储HSL值
+        baseColor.getHSL(customColor.hsl!);
+      }
+
+      return 'custom';
+    }
+
+    // 格式 2：?v=hXX
+    if (vParam && vParam.startsWith('h') && vParam.length === 3) {
+      return vParam.slice(1, 3);
+    }
+
+    // 不符合任何格式，返回默认值
+    return 0;
+  }
+
+  // url + 材质参数
+  generateCustomParams(): string {
+    // 从 Map 中安全获取 custom（解决 undefined 类型报错）
+    const custom = sceneConfig.colors.get('custom');
+    if (!custom) return '';
+
+    if (Ie.currentColorIndex === 'custom') {
+      // 粗糙度 → 2位十六进制
+      let n = Math.round(custom.rough * 255).toString(16);
+      if (n.length < 2) n = '0' + n;
+
+      // 金属度 → 2位十六进制
+      let r = Math.round(custom.metal * 255).toString(16);
+      if (r.length < 2) r = '0' + r;
+
+      // 颜色十六进制
+      const s = custom.col.getHexString();
+
+      // 拼接完整 URL
+      const base = 'https://gamemcu.com/su7?v=';
+      return base + s + n + r;
+    } else {
+      // 预设颜色
+      const base = 'https://gamemcu.com/su7?v=h';
+      return base + Ie.currentColorIndex;
+    }
+  }
+
+  // 处理切换颜色
+  handleColorChange(index: 'custom' | string | 0): void {
+    this.currentColorIndex = index;
+
+    // 警车
+    if (index === '11') {
+      sceneConfig.u_policeColorChange.value = 1;
+      sceneConfig.sm_car_lightbar.visible = true;
+    } else {
+      sceneConfig.u_policeColorChange.value = 0;
+      sceneConfig.sm_car_lightbar.visible = false;
+    }
+
+    // const {
+    //   col: Pe,
+    //   tcar: Be,
+    //   tw: Re,
+    //   twr: ct,
+    //   metal: et,
+    //   rough: Ze,
+    //   tf: Nt,
+    // } = sceneConfig.colors.get(index);
   }
 
   private onPointerDown = () => {
@@ -607,8 +1047,6 @@ export class SceneManager {
     return this.envMaps[envName] || null;
   }
 
-  async initScene(): Promise<void> {}
-
   // 更新实时环境贴图与模糊
   private _updateReflection(): void {
     // 确保所有部件都已初始化
@@ -623,7 +1061,6 @@ export class SceneManager {
     if (this._animationFrameId) return;
 
     const render = () => {
-      this.controls.update();
       this._animationFrameId = requestAnimationFrame(render);
 
       // this._updateReflection();
@@ -644,6 +1081,9 @@ export class SceneManager {
         deltaTime * sceneConfig.u_speedUpBackgroundValue.value * 0.2;
       this.globalUniforms.u_time.value = this.timer.getElapsed();
       this.materialManager.updateSmCarCarBody();
+
+      this.cameraManager && this.cameraManager.update(deltaTime);
+      // this.controls.update();
 
       // this.materialManager.updateEnvMap(new THREE.Vector3(0, 0, 0));
 
@@ -707,8 +1147,8 @@ export class SceneManager {
 
   private setupBusListeners(): void {
     // 监听模块切换
-    eventBus.on('UI-RightContent:changeModule', ({ module: module }) => {
-      console.log('UI-RightContent:changeModule', module);
+    eventBus.on('ChangeModule', ({ module: module }) => {
+      console.log('ChangeModule', module);
 
       if (module !== 4 && this.screenshotManager?._enabled) {
         this.screenshotManager.hide();
@@ -738,108 +1178,6 @@ export class SceneManager {
     this.screenshotManager!.screenshot();
   }
 
-  public getCurrentModule(module?: Module): void {
-    this.carMotionManager?.getCurrentModule(module);
-  }
-
-  public showModel(duration: number = 1, delay: number = 0) {
-    // 先停止旧动画
-    // gsap.killTweensOf(this.windModel);
-    // gsap.to(this.windModel, {
-    //   duration: duration,
-    //   delay: delay,
-    //   visibility: 1,
-    //   ease: 'power2.inOut', // 对应 Cubic.InOut
-    //   onUpdate: () => {
-    //     // 动画每帧更新透明度
-    //     this.setWindVisibility(this.windModel.visibility);
-    //   },
-    // });
-  }
-
-  // 淡出（1 → 0）
-  public hideModel(duration: number = 1, delay: number = 0) {
-    // gsap.killTweensOf(this.windModel);
-    // gsap.to(this.windModel, {
-    //   duration: duration,
-    //   delay: delay,
-    //   visibility: 0,
-    //   ease: 'power2.inOut',
-    //   onUpdate: () => {
-    //     this.setWindVisibility(this.windModel.visibility);
-    //   },
-    // });
-  }
-
-  // 解析 url, "custom"自定义颜色，字符串数字颜色索引，0默认颜色
-  getCustomParams(): 'custom' | string | 0 {
-    const urlParams = new URLSearchParams(window.location.search);
-    const vParam = urlParams.get('v');
-
-    // 处理10位自定义颜色格式: RRGGBB + 粗糙度(2位) + 金属度(2位)
-    if (vParam && vParam.length === 10) {
-      const colorHex = vParam.slice(0, 6);
-      const roughHex = vParam.slice(6, 8);
-      const metalHex = vParam.slice(8, 10);
-
-      // 解析为0-1范围的浮点数
-      const roughness = parseInt(roughHex, 16) / 255;
-      const metalness = parseInt(metalHex, 16) / 255;
-
-      const customColor = sceneConfig.colors.get('custom');
-      if (!customColor) {
-        return 0;
-      }
-
-      roughness && (customColor.rough = roughness);
-      metalness && (customColor.metal = metalness);
-
-      if (colorHex) {
-        const baseColor = new THREE.Color(`#${colorHex}`);
-        customColor.col.copy(baseColor);
-        baseColor.convertLinearToSRGB();
-        // 计算并存储HSL值
-        baseColor.getHSL(customColor.hsl!);
-      }
-
-      return 'custom';
-    }
-    if (vParam && vParam.startsWith('h') && vParam.length === 3) {
-      return vParam.slice(1, 3);
-    }
-
-    // 不符合任何格式，返回默认值
-    return 0;
-  }
-
-  // url + 材质参数
-  generateCustomParams(): string {
-    // 从 Map 中安全获取 custom（解决 undefined 类型报错）
-    const custom = sceneConfig.colors.get('custom');
-    if (!custom) return '';
-
-    if (Ie.currentColorIndex === 'custom') {
-      // 粗糙度 → 2位十六进制
-      let n = Math.round(custom.rough * 255).toString(16);
-      if (n.length < 2) n = '0' + n;
-
-      // 金属度 → 2位十六进制
-      let r = Math.round(custom.metal * 255).toString(16);
-      if (r.length < 2) r = '0' + r;
-
-      // 颜色十六进制
-      const s = custom.col.getHexString();
-
-      // 拼接完整 URL
-      const base = 'https://gamemcu.com/su7?v=';
-      return base + s + n + r;
-    } else {
-      // 预设颜色
-      const base = 'https://gamemcu.com/su7?v=h';
-      return base + Ie.currentColorIndex;
-    }
-  }
-
   public dispose(): void {
     this.stopRender();
     if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
@@ -865,7 +1203,7 @@ export class SceneManager {
     if (this.gui) {
       this.gui.destroy();
     }
-    this.controls.dispose();
+    this.cameraManager && this.cameraManager.dispose();
     this.scene.clear();
     this.camera.clear();
     SceneManager.instance = null;

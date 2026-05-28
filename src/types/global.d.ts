@@ -17,7 +17,7 @@ interface NodeModule {
 declare global {
   type ProgressCallback = (p: { loadedBytes: number; currentFile: string }) => void;
 
-  type Module = 0 | 1 | 2 | 3 | 4;
+  type Module = 0 | 1 | 2 | 3 | 4 | 5;
 }
 
 declare module 'react' {

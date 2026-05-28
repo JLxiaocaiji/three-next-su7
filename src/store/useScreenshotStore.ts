@@ -19,45 +19,7 @@ interface State {
 
 export const useScreenshotStore = create<State>()(
   immer((set, get) => {
-    // 截图相关
-    const completeScreenShot = (screenshot: {
-      picUrl: string;
-      width: number;
-      height: number;
-      visible: boolean;
-    }) => {
-      set((state) => {
-        state.screenshot = screenshot;
-      });
-    };
-
-    const hideScreenshot = () => {
-      set((state) => {
-        state.screenshot.visible = false;
-      });
-    };
-
-    const showScreenshot = () => {
-      set((state) => {
-        const sceneManager = SceneManager.getInstance();
-        sceneManager!.screenshot();
-        // state.screenshot.visible = true;
-      });
-    };
-
-    eventBus.off('ScreenshotManager:complete', completeScreenShot);
-    eventBus.off('ScreenshotManager:hide', hideScreenshot);
-    eventBus.off('ScreenshotManager:screenshot', showScreenshot);
-
-    eventBus.on('ScreenshotManager:complete', completeScreenShot);
-    eventBus.on('ScreenshotManager:hide', hideScreenshot);
-    eventBus.on('ScreenshotManager:screenshot', showScreenshot);
-
     return {
-      user: { name: '' },
-      // 状态
-      currentModule: 0,
-
       screenshot: { picUrl: '', width: 0, height: 0, visible: false },
 
       // 截图相关
@@ -75,13 +37,46 @@ export const useScreenshotStore = create<State>()(
           state.screenshot.visible = visible;
         }),
 
-      cleanup: () => {
-        eventBus.off('ScreenshotManager:complete', completeScreenShot);
-        eventBus.off('ScreenshotManager:hide', hideScreenshot);
-        eventBus.off('ScreenshotManager:screenshot', showScreenshot);
-      },
+      cleanup: () => {},
     };
   })
 );
+
+const store = useScreenshotStore.getState();
+
+// 截图相关
+const completeScreenShot = (screenshot: {
+  picUrl: string;
+  width: number;
+  height: number;
+  visible: boolean;
+}) => {
+  store.setScreenshot(screenshot.picUrl, screenshot.width, screenshot.height, screenshot.visible);
+};
+
+const hideScreenshot = () => {
+  store.setScreenshotVisible(false);
+};
+
+const showScreenshot = () => {
+  const sceneManager = SceneManager.getInstance();
+  sceneManager!.screenshot();
+};
+
+eventBus.off('ScreenshotManager:complete', completeScreenShot);
+eventBus.off('ScreenshotManager:hide', hideScreenshot);
+eventBus.off('ScreenshotManager:screenshot', showScreenshot);
+
+eventBus.on('ScreenshotManager:complete', completeScreenShot);
+eventBus.on('ScreenshotManager:hide', hideScreenshot);
+eventBus.on('ScreenshotManager:screenshot', showScreenshot);
+
+useScreenshotStore.setState({
+  cleanup: () => {
+    eventBus.off('ScreenshotManager:complete', completeScreenShot);
+    eventBus.off('ScreenshotManager:hide', hideScreenshot);
+    eventBus.off('ScreenshotManager:screenshot', showScreenshot);
+  },
+});
 
 export const useScreenshot = () => useScreenshotStore((state) => state.screenshot);

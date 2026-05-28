@@ -117,7 +117,7 @@ export class ReflectManager {
       // ...ShaderUniformLib.fog, // 继承全局雾配置
       // ...ShaderUniformLib.lights, // 继承全局灯光配置
 
-      ...lightUniforms, // 保证 lights 结构完整且未被浅拷贝破坏
+      ...lightUniforms,
       ...fogUniforms,
 
       u_reflectMatrix: { value: this._reflectMatrix },

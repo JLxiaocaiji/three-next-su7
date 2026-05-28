@@ -122,11 +122,9 @@ class SceneConfig {
     this.u_speedTime = { value: 0 };
 
     // 变化值
-    // this.u_floorLightMapIntensity = { value: 0 };
-    this.u_floorLightMapIntensity = { value: 1 };
+    this.u_floorLightMapIntensity = { value: 0 };
     this.u_floorLightMapColor = { value: new Color('#000000') };
-    // this.u_floorReflectIntensity = { value: 0.1 };
-    this.u_floorReflectIntensity = { value: 1 };
+    this.u_floorReflectIntensity = { value: 0 };
     this.u_floorUVOffset = { value: new Vector2() };
     this.u_simpleCarCenter1 = { value: new Vector3() };
     this.u_simpleCarCenter2 = { value: new Vector3() };
@@ -280,9 +278,9 @@ class SceneConfig {
   }
 
   /**
-   * 从 URL 获取自定义颜色参数
+   * 从 URL 获取自定义颜色参数  "custom"自定义颜色，字符串数字颜色索引，0默认颜色
    */
-  getCustomParams(): string | number {
+  getCustomParams(): 'custom' | string | 0 {
     const urlParams = new URLSearchParams(window.location.search);
     const v = urlParams.get('v');
 

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { gsap } from 'gsap';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PerlinNoise, clamp, isTouchDevice, randFloat } from '@/utils';
 import { SpringCamera } from '@/classes/SpringCamera';
 
@@ -60,8 +59,8 @@ export class CameraManager {
   private lerpStrength = 1;
   private moveSpeed = [1, 1];
   private _currentLengthOffset = 0;
-  private _springRotationZClampRange: [number, number] = [-Math.PI / 6, Math.PI / 6]; // [0.02, 0.3]
-  private _springRotationYClampRange: [number, number] = [-Infinity, Infinity]; // [-100, 100]
+  private _springRotationZClampRange: [number, number] = [0.02, 0.3];
+  private _springRotationYClampRange: [number, number] = [-100, 100];
   private _deltaRotation = new THREE.Euler();
   private _targetRotation = new THREE.Euler();
   private _targetSpringLength = 0;
@@ -85,10 +84,6 @@ export class CameraManager {
   private currentShowingState: Module = ViewState.State1;
   private isTransitioning = true;
 
-  private orbitControls: OrbitControls;
-  // 控制模式
-  private controlMode: 'spring' | 'orbit' = 'spring';
-
   private _tempVec21 = new THREE.Vector2(); // $u
   private _tempVec22 = new THREE.Vector2(); // $u
 
@@ -102,12 +97,6 @@ export class CameraManager {
     this.dom = dom;
     this._springCamera = springCamera;
     this._camera = camera;
-
-    this.orbitControls = new OrbitControls(this._camera, this.dom);
-    this.orbitControls.enableDamping = true;
-    this.orbitControls.dampingFactor = 0.05;
-    this.orbitControls.enabled = false;
-
     this.reset();
     // this.bindEvents();
   }
@@ -159,45 +148,6 @@ export class CameraManager {
     }
   }
 
-  // 切换控制模式
-  public switchToOrbitMode(): void {
-    if (this.controlMode === 'orbit') return;
-
-    this.controlMode = 'orbit';
-    this.enableControlCamera = false;
-    this.orbitControls.enabled = true;
-    this._springCamera.enabled = false;
-
-    // 将当前相机状态同步到OrbitControls
-    this.orbitControls.target.copy(this._springCamera.lookAt);
-    this.orbitControls.update();
-  }
-
-  public switchToSpringMode(): void {
-    if (this.controlMode === 'spring') return;
-
-    this.controlMode = 'spring';
-    this.orbitControls.enabled = false;
-    this._enableControlCamera = true;
-    this._springCamera.enabled = true;
-
-    // 将OrbitControls的状态同步回弹簧相机
-    const target = this.orbitControls.target.clone();
-    const distance = this._camera.position.distanceTo(target);
-
-    this.reset();
-    this._targetLookAt.copy(target);
-    this._targetSpringLength = distance;
-
-    // 从相机位置计算旋转
-    const direction = this._camera.position.clone().sub(target).normalize();
-    const rotation = new THREE.Euler().setFromQuaternion(
-      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction),
-      'YZX'
-    );
-    this._targetRotation.copy(rotation);
-  }
-
   reset() {
     this._button = -1;
     this._touchID = -1;
@@ -205,13 +155,8 @@ export class CameraManager {
     this._targetLookAt.copy(this._springCamera.lookAt);
     this._targetRotation.copy(this._springCamera.rotation);
     this._deltaRotation.set(0, 0, 0);
-    this._tempEuler1.set(0, 0, 0);
     this.targetFov = this._camera.fov;
     this.isAnimatingPOI = false;
-
-    if (this.controlMode === 'spring') {
-      this._springCamera.enabled = true;
-    }
   }
 
   private _onMouseDown = (e: PointerEvent) => {
@@ -289,15 +234,6 @@ export class CameraManager {
       this._camera.updateProjectionMatrix();
     }
 
-    if (this.controlMode === 'orbit') {
-      this.orbitControls.update(delta);
-      return;
-    }
-
-    if (this._springCamera.enabled) {
-      this._springCamera.update(delta);
-    }
-
     if (this.isAnimatingPOI) {
       return;
     }
@@ -310,13 +246,11 @@ export class CameraManager {
 
     const finalLen = this._targetSpringLength + this._currentLengthOffset;
 
-    this._springCamera.lookAt.lerp(this._targetLookAt, delta * 5);
+    this._springCamera.lookAt.lerp(this._targetLookAt, delta);
     this._springCamera.springLength = THREE.MathUtils.lerp(
       this._springCamera.springLength,
       finalLen,
-      // 0.016 * this._lerpLengthStrength
       delta * this._lerpLengthStrength
-      // delta * this._lerpLengthStrength * 60
     );
 
     // TO(this._deltaRotation, Ev, r * 10),
@@ -359,7 +293,6 @@ export class CameraManager {
     springLength: number,
     rotation: THREE.Euler,
     duration: number = 1.5,
-    switchToOrbitAfter: boolean = true, // 动画完成后是否切换到OrbitControls
     easing: string = 'power2.inOut',
     delay: number = 0
   ) {
@@ -370,8 +303,36 @@ export class CameraManager {
 
       this.isAnimatingPOI = true;
 
-      this.orbitControls.enabled = false;
-      this.controlMode = 'spring';
+      // 3. 安全调用子相机（弹簧相机）的 gotoPOI
+      // if (this._springCamera != null) {
+      //   this._springCamera
+      //     .gotoPOI(targetLookAt, springLength, rotation, duration, easing, delay)
+      //     .then(() => {
+      //       this.reset();
+      //       this.isAnimatingPOI = false;
+      //       resolve(true);
+      //     });
+      // } else {
+      //   this.isAnimatingPOI = false;
+      //   resolve(false);
+      // }
+
+      // gsap
+      //   .timeline()
+      //   .delay(duration + delay)
+      //   .call(() => {
+      //     this.reset();
+      //     this.isAnimatingPOI = false;
+      //   })
+      //   .play();
+
+      // if (this._springCamera != null) {
+      //   this._springCamera
+      //     .gotoPOI(targetLookAt, springLength, rotation, duration, easing, delay)
+      //     .then(() => resolve(true));
+      // } else {
+      //   resolve(false);
+      // }
 
       const prevEnableControl = this._enableControlCamera;
       this._enableControlCamera = false;
@@ -380,13 +341,11 @@ export class CameraManager {
         this._springCamera
           .gotoPOI(targetLookAt, springLength, rotation, duration, easing, delay)
           .then(() => {
+            // ✅ 动画完成后再重置状态
             this.reset();
+            // 恢复之前的控制状态
             this._enableControlCamera = prevEnableControl;
             this.isAnimatingPOI = false;
-
-            if (switchToOrbitAfter) {
-              this.switchToOrbitMode();
-            }
             resolve(true);
           });
       } else {
@@ -401,9 +360,6 @@ export class CameraManager {
     springLength: number,
     targetRotation: THREE.Euler
   ): void {
-    gsap.killTweensOf(this);
-    gsap.killTweensOf(this._springCamera);
-    gsap.killTweensOf(this._springCamera.lookAt);
     this.reset();
 
     // 旋转插值强度先设为 0
@@ -437,9 +393,10 @@ export class CameraManager {
       // 立即上锁，防止重复触发
       this.isTransitioning = true;
 
+      // 创建GSAP时间线，控制互斥锁释放时机
       gsap
         .timeline()
-        .to({}, { duration: DURATION }) // 占位动画
+        .to({}, { duration: DURATION }) // 占位动画（实际UI动画应在此处）
         .delay(DURATION) // 额外延迟0.3s
         .call(() => {
           // 动画完成后解锁
@@ -465,17 +422,6 @@ export class CameraManager {
 
       eventBus.emit('ChangeModule', { module: this.currentShowingState });
     }
-  }
-
-  dispose() {
-    this.orbitControls && this.orbitControls.dispose();
-
-    this.dom.removeEventListener('pointerdown', this._onMouseDown);
-    this.dom.removeEventListener('pointerup', this._onMouseUp);
-    this.dom.removeEventListener('pointermove', this._onMouseMove);
-    this.dom.removeEventListener('wheel', this._onMouseWheel);
-    this.dom.removeEventListener('touchstart', this._onTouchStart);
-    this.dom.removeEventListener('touchmove', this._onTouchMove);
   }
 
   private bindEvents() {

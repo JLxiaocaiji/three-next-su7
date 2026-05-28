@@ -411,17 +411,22 @@ export class SceneEventManager {
     // 顶灯颜色渐变动画
     gsap.killTweensOf(this.topLightController);
     gsap
-      .timeline({ targets: this.topLightController })
+      .timeline()
       .delay(1.5)
-      .to({}, 2.5, {
-        onUpdate: (_, progress) => {
+      .to(this.topLightController, {
+        duration: 2.5,
+        onUpdate: function () {
+          const progress = this.progress();
           tempColor.copy(black).lerp(green, progress);
           this.topLightController.lightEmissiveColor = tempColor;
           this.topLightController.lightEmissiveIntensity = progress * 0.4;
         },
+        ease: Power3.easeIn,
       })
-      .to({}, 2, {
-        onUpdate: (_, progress) => {
+      .to(this.topLightController, {
+        duration: 2,
+        onUpdate: function () {
+          const progress = this.progress();
           tempColor.copy(green).lerpHSL(white, progress);
           this.topLightController.lightEmissiveColor = tempColor;
           this.topLightController.lightEmissiveIntensity = progress * 2.3 + 0.4;
@@ -440,18 +445,24 @@ export class SceneEventManager {
     // 地板光颜色渐变
     gsap.killTweensOf(this.uniforms.u_floorLightMapIntensity);
     gsap
-      .timeline({ targets: this.uniforms.u_floorLightMapIntensity })
+      .timeline()
       .delay(1.5)
-      .to({ value: 0.1 }, 2.5, {
+      .to(this.uniforms.u_floorLightMapIntensity, {
+        value: 0.1,
+        duration: 2.5,
         ease: Power3.easeIn,
-        onUpdate: (_, progress) => {
+        onUpdate: function () {
+          const progress = this.progress();
           tempColor.copy(floorLightBaseColor).lerpHSL(green, progress);
           this.uniforms.u_floorLightMapColor.value.copy(tempColor);
         },
       })
-      .to({ value: 1 }, 2, {
+      .to(this.uniforms.u_floorLightMapIntensity, {
+        value: 1,
+        duration: 2,
         ease: Linear.easeNone,
-        onUpdate: (_, progress) => {
+        onUpdate: function () {
+          const progress = this.progress();
           tempColor.copy(green).lerpHSL(white, progress);
           this.uniforms.u_floorLightMapColor.value.copy(tempColor);
         },
@@ -460,10 +471,18 @@ export class SceneEventManager {
     // 地板反射强度
     gsap.killTweensOf(this.uniforms.u_floorReflectIntensity);
     gsap
-      .timeline({ targets: this.uniforms.u_floorReflectIntensity })
+      .timeline()
       .delay(1.8)
-      .to({ value: 0.1 }, 1.5, { ease: Power3.easeIn })
-      .to({ value: 1 }, 1.5, { ease: Linear.easeNone });
+      .to(this.uniforms.u_floorReflectIntensity, {
+        value: 0.1,
+        duration: 1.5,
+        ease: Power3.easeIn,
+      })
+      .to(this.uniforms.u_floorReflectIntensity, {
+        value: 1,
+        duration: 1.5,
+        ease: Linear.easeNone,
+      });
   }
 
   /**

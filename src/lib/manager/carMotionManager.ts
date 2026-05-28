@@ -53,11 +53,9 @@ export class CarMotionManager {
     }
     const temp = await new Promise<Module | null>((resolve) => {
       // 1. 监听返回事件
-      eventBus.on('Store:returnModule', ({ module: module }: { module: Module }) => {
+      eventBus.on('GetCurrentModule', ({ module: module }: { module: Module }) => {
         resolve(module);
       });
-
-      eventBus.emit('CarMotionManager:getCurrentModule');
     });
 
     this.currentModule = temp || 0;

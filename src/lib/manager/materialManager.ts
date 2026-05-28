@@ -343,7 +343,7 @@ export class MaterialManager {
               // texture.flipY = false;
               texture.colorSpace = THREE.LinearSRGBColorSpace;
               // texture.mapping = THREE.EquirectangularReflectionMapping;
-              // texture.type = THREE.HalfFloatType;
+              texture.type = THREE.HalfFloatType;
 
               // if (!this.pmremGenerator) {
               //   try {
@@ -372,7 +372,7 @@ export class MaterialManager {
               if (textureObj[name]) {
                 sceneConfig[textureObj[name]].value = texture;
                 this.textureCache.set(name, texture);
-                texture.dispose();
+                // texture.dispose();
               }
 
               onStep?.();
@@ -431,7 +431,9 @@ export class MaterialManager {
   public async initEnvironment(hdrName: string = 't_env_night'): Promise<void> {
     if (!this.ensureSceneManager() || !this._renderer || !this._scene) return;
 
-    const hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
+    let hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
+
+    console.log('MaterialManager: 初始化环境贴图', hdrTexture);
 
     if (!hdrTexture) {
       console.warn(`MaterialManager: HDR 纹理 ${hdrName} 未在缓存中，尝试直接加载`);
@@ -447,6 +449,7 @@ export class MaterialManager {
         config.type
       );
       if (!result.success) return;
+      hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
     }
 
     if (!hdrTexture) {
@@ -474,7 +477,7 @@ export class MaterialManager {
     this._scene.environment = pmremTexture;
     this._scene.background = pmremTexture;
 
-    hdrTexture.dispose();
+    // hdrTexture.dispose();
 
     if (!this._cubeCamera) return;
     this._cubeCamera.layers.set(sceneConfig.LAYER_CAPTURE);
@@ -911,17 +914,15 @@ export class MaterialManager {
       console.warn('this.sceneManager!.u_speedTime', this.sceneManager);
     }
 
-    meshData.meshes.forEach((item: THREE.Mesh) => {
-      // 统一赋值加速特效材质
-      item.material = new THREE.ShaderMaterial({
-        // 着色器统一变量（外部可动态传入的参数）
-        uniforms: {
-          time: this.sceneManager!.globalUniforms.u_speedTime, // 时间：驱动流动动画
-          vSpeed: sceneConfig.u_speedUpBackgroundValue, // 车辆速度：控制光效强度
-          vPoliceColorChange: sceneConfig.u_policeColorChange, // 警灯模式开关：0=普通流光 1=警灯
-        },
-        vertexShader: customVertexShader, // 外部传入的顶点着色器（传递顶点位置、UV、法线）
-        fragmentShader: `
+    let material = new THREE.ShaderMaterial({
+      // 着色器统一变量（外部可动态传入的参数）
+      uniforms: {
+        time: this.sceneManager!.globalUniforms.u_speedTime, // 时间：驱动流动动画
+        vSpeed: sceneConfig.u_speedUpBackgroundValue, // 车辆速度：控制光效强度
+        vPoliceColorChange: sceneConfig.u_policeColorChange, // 警灯模式开关：0=普通流光 1=警灯
+      },
+      vertexShader: customVertexShader, // 外部传入的顶点着色器（传递顶点位置、UV、法线）
+      fragmentShader: `
           varying vec3 vPosition;    // 顶点局部坐标
           varying vec3 vNormal;      // 顶点局部法线
           varying vec2 vUv;          // UV 坐标（核心：控制流光方向）
@@ -988,9 +989,13 @@ export class MaterialManager {
             // #include <colorspace_fragment>
           }
         `,
-        depthWrite: false, // 关闭深度写入：防止遮挡其他物体
-        transparent: true, // 开启透明：线条外区域透明
-      });
+      depthWrite: false, // 关闭深度写入：防止遮挡其他物体
+      transparent: true, // 开启透明：线条外区域透明
+    });
+
+    meshData.meshes.forEach((item: THREE.Mesh) => {
+      // 统一赋值加速特效材质
+      item.material = material;
       item.layers.enable(sceneConfig.LAYER_CAPTURE);
       item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
     });
@@ -1058,27 +1063,26 @@ export class MaterialManager {
 
   // sm_windspeed -> 风动线
   public initWindspeedMaterial(meshData: ModelMeshData): void {
-    meshData.meshes.forEach((item: THREE.Mesh) => {
-      item.material = new THREE.ShaderMaterial({
-        name: 'm_windLine', // 材质名称：风动线
+    let material = new THREE.ShaderMaterial({
+      name: 'm_windLine', // 材质名称：风动线
 
-        uniforms: {
-          // 噪声参数（控制透明度变化）：x缩放 y缩放 强度 速度
-          vNoiseParams_alpha: { value: new THREE.Vector4(6, 2, 2, 0.5) },
+      uniforms: {
+        // 噪声参数（控制透明度变化）：x缩放 y缩放 强度 速度
+        vNoiseParams_alpha: { value: new THREE.Vector4(6, 2, 2, 0.5) },
 
-          // 波浪噪声参数（控制UV横向偏移扰动）：x缩放 y缩放 强度 速度
-          vNoiseParams_wave: { value: new THREE.Vector4(2, 1, 1, 0.5) },
+        // 波浪噪声参数（控制UV横向偏移扰动）：x缩放 y缩放 强度 速度
+        vNoiseParams_wave: { value: new THREE.Vector4(2, 1, 1, 0.5) },
 
-          vIntensity: { value: 3 }, // 光效亮度强度
-          vColor: { value: new THREE.Color('#cdeffe') }, // 光效颜色（淡蓝色）
-          tSaLine: { value: this.textureCache.get('t_saLine') || null }, // 线条遮罩贴图
-          time: this._globalUniforms.u_time.value, // 时间（驱动动画）
-          opacity: { value: 1 }, // 整体透明度
-        },
-        vertexShader: customVertexShader,
+        vIntensity: { value: 3 }, // 光效亮度强度
+        vColor: { value: new THREE.Color('#cdeffe') }, // 光效颜色（淡蓝色）
+        tSaLine: { value: this.textureCache.get('t_saLine') || null }, // 线条遮罩贴图
+        time: this._globalUniforms.u_time.value, // 时间（驱动动画）
+        opacity: { value: 1 }, // 整体透明度
+      },
+      vertexShader: customVertexShader,
 
-        // 片元着色器：风动线核心逻辑
-        fragmentShader: `
+      // 片元着色器：风动线核心逻辑
+      fragmentShader: `
           varying vec3 vPosition;    // 局部坐标
           varying vec3 vNormal;      // 法线
           varying vec2 vUv;          // UV坐标
@@ -1139,41 +1143,43 @@ export class MaterialManager {
           }
           `,
 
-        transparent: true, // 开启透明
-        depthWrite: false, // 关闭深度，防止遮挡，保证叠加发光
-        side: THREE.DoubleSide, // 渲染正反面
-      });
+      transparent: true, // 开启透明
+      depthWrite: false, // 关闭深度，防止遮挡，保证叠加发光
+      side: THREE.DoubleSide, // 渲染正反面
+    });
+    meshData.meshes.forEach((item: THREE.Mesh) => {
+      item.material = material;
 
-      meshData.materials.m_windLine = item.material;
       item.layers.enable(sceneConfig.LAYER_CAPTURE);
     });
+
+    meshData.materials.m_windLine = material;
   }
 
   public initLinecarMaterial(meshData: ModelMeshData): void {
-    meshData.meshes.forEach((item: THREE.Mesh) => {
-      item.material = new THREE.ShaderMaterial({
-        // 材质名称：流动线/流动车线
-        name: 'm_linecar',
+    let material = new THREE.ShaderMaterial({
+      // 材质名称：流动线/流动车线
+      name: 'm_linecar',
 
-        uniforms: {
-          // 时间：驱动流动动画
-          time: this._globalUniforms.u_time.value,
+      uniforms: {
+        // 时间：驱动流动动画
+        time: this._globalUniforms.u_time.value,
 
-          // 透明度：整体控制显示/隐藏
-          opacity: { value: 1 },
+        // 透明度：整体控制显示/隐藏
+        opacity: { value: 1 },
 
-          // 流动噪声参数
-          // x: 噪声缩放
-          // y: 噪声缩放
-          // z: 亮度强度
-          // w: 流动速度
-          vNoiseParams_wave: { value: new THREE.Vector4(1, 20, 10, 1.2) },
-        },
+        // 流动噪声参数
+        // x: 噪声缩放
+        // y: 噪声缩放
+        // z: 亮度强度
+        // w: 流动速度
+        vNoiseParams_wave: { value: new THREE.Vector4(1, 20, 10, 1.2) },
+      },
 
-        // 顶点着色器（你这里用外部引入 If，通常是传递顶点位置、UV、法向量、颜色）
-        vertexShader: customVertexShader,
+      // 顶点着色器（你这里用外部引入 If，通常是传递顶点位置、UV、法向量、颜色）
+      vertexShader: customVertexShader,
 
-        fragmentShader: `
+      fragmentShader: `
           // 顶点着色器传过来的变量
           varying vec3 vPosition;    // 局部坐标
           varying vec3 vNormal;      // 局部法向量
@@ -1228,34 +1234,34 @@ export class MaterialManager {
           }
           `,
 
-        transparent: true, // 开启透明
-        depthWrite: false, // 关闭深度写入（防止透明遮挡异常）
-        blending: THREE.AdditiveBlending, // 加法混合/发光混合
-        side: THREE.DoubleSide,
-      });
-
-      meshData.materials.m_linecar = item.material;
+      transparent: true, // 开启透明
+      depthWrite: false, // 关闭深度写入（防止透明遮挡异常）
+      blending: THREE.AdditiveBlending, // 加法混合/发光混合
+      side: THREE.DoubleSide,
     });
+    meshData.meshes.forEach((item: THREE.Mesh) => {
+      item.material = material;
+    });
+    meshData.materials.m_linecar = material;
   }
 
   // sm_carradar
   public initCarradarMaterial(meshData: ModelMeshData): void {
-    meshData.meshes.forEach((item: THREE.Mesh) => {
-      item.material = new THREE.ShaderMaterial({
-        // 材质名称：车雷达
-        name: 'm_carradar',
+    let material = new THREE.ShaderMaterial({
+      // 材质名称：车雷达
+      name: 'm_carradar',
 
-        uniforms: {
-          time: this._globalUniforms.u_time.value, // 时间：驱动动画
-          opacity: { value: 1 }, // 透明度
-          uColor: { value: new THREE.Color('#88eeff') }, // 基础颜色：亮蓝色
-          uCenter1: sceneConfig.u_simpleCarCenter1, // 雷达中心点1（车前/车后）
-          uCenter2: sceneConfig.u_simpleCarCenter2, // 雷达中心点2
-        },
+      uniforms: {
+        time: this._globalUniforms.u_time.value, // 时间：驱动动画
+        opacity: { value: 1 }, // 透明度
+        uColor: { value: new THREE.Color('#88eeff') }, // 基础颜色：亮蓝色
+        uCenter1: sceneConfig.u_simpleCarCenter1, // 雷达中心点1（车前/车后）
+        uCenter2: sceneConfig.u_simpleCarCenter2, // 雷达中心点2
+      },
 
-        vertexShader: customVertexShader,
+      vertexShader: customVertexShader,
 
-        fragmentShader: `
+      fragmentShader: `
           varying vec3 vPosition;    // 局部坐标
           varying vec3 vNormal;      // 法线
           varying vec2 vUv;          // UV坐标
@@ -1323,15 +1329,17 @@ export class MaterialManager {
           }
         `,
 
-        transparent: true, // 透明
-        depthWrite: false, // 不写深度，防止遮挡
-        blending: THREE.AdditiveBlending, // 加法发光模式（越叠越亮）
-        side: THREE.DoubleSide,
-      });
-
-      meshData.materials.m_carradar = item.material;
+      transparent: true, // 透明
+      depthWrite: false, // 不写深度，防止遮挡
+      blending: THREE.AdditiveBlending, // 加法发光模式（越叠越亮）
+      side: THREE.DoubleSide,
+    });
+    meshData.meshes.forEach((item: THREE.Mesh) => {
+      item.material = material;
       item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
     });
+
+    meshData.materials.m_carradar = material;
   }
 
   // sm_simpleCar
@@ -1485,52 +1493,6 @@ export class MaterialManager {
     this.startroomLightMaterial.opacity = 1;
     // 强制材质更新
     this.startroomLightMaterial.needsUpdate = true;
-  }
-
-  public getStartroomLightMaterialEmissiveIntensity() {
-    return this.startroomLightMaterial!.emissiveIntensity;
-  }
-  public setStartroomLightMaterialEmissiveIntensity(value: number) {
-    this.startroomLightMaterial!.emissiveIntensity = value;
-  }
-  public getStartroomLightMaterialEmissiveColor() {
-    return this.startroomLightMaterial!.emissive;
-  }
-  public setStartroomLightMaterialEmissiveColor(value: THREE.Color) {
-    this.startroomLightMaterial!.emissive.copy(value);
-  }
-  public getStartroomLightMaterialOpacity() {
-    return this.startroomLightMaterial!.opacity;
-  }
-  public setStartroomLightMaterialOpacity(value: number) {
-    this.startroomLightMaterial!.opacity = value;
-  }
-
-  // 自发光强度 getter/setter
-  get startroomLightMaterialEmissiveIntensity(): number {
-    return this.startroomLightMaterial!.emissiveIntensity;
-  }
-
-  set startroomLightMaterialEmissiveIntensity(value: number) {
-    this.startroomLightMaterial!.emissiveIntensity = value;
-  }
-
-  // 自发光颜色 getter/setter
-  get startroomLightMaterialEmissiveColor(): THREE.Color {
-    return this.startroomLightMaterial!.emissive;
-  }
-
-  set startroomLightMaterialEmissiveColor(value: THREE.Color) {
-    this.startroomLightMaterial!.emissive.copy(value);
-  }
-
-  // 自发光透明度 getter/setter
-  get startroomLightMaterialOpacity(): number {
-    return this.startroomLightMaterial!.opacity;
-  }
-
-  set startroomLightMaterialOpacity(value: number) {
-    this.startroomLightMaterial!.opacity = value;
   }
 
   // 设置汽车车灯材质

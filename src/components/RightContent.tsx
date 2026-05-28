@@ -21,7 +21,7 @@ export default function RightContent({
 
   const tap = useTap((e: Part) => {
     setPart(e.partId);
-    eventBus.emit('UI-RightContent:changeModule', { module: e.partId });
+    eventBus.emit('ChangeModule', { module: e.partId });
   });
 
   return (

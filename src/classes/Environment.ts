@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { gsap } from 'gsap';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 type SourceData = {
   data: Uint8Array | Float32Array | null;
@@ -7,23 +8,36 @@ type SourceData = {
   height: number;
 };
 
+enum EnvState {
+  light = 2,
+  night = 1,
+  dark = 0,
+}
+
 /**
  * 动态环境贴图生成器
  * 负责将混合后的环境贴图渲染到立方体贴图渲染目标
  */
 class Environment {
+  private _renderer: THREE.WebGLRenderer;
+  private _pmremGenerator: THREE.PMREMGenerator;
+
   private _renderTarget: THREE.WebGLRenderTarget;
-  private _fullscreenQuad: THREE.Mesh;
-  private _scene: THREE.Scene;
-  private _camera: THREE.OrthographicCamera;
   private _mixMaterial: THREE.ShaderMaterial;
-  private _pmremGenerator: THREE.PMREMGenerator | null = null;
+  private _fullScreenQuad: FullScreenQuad;
+
+  private _pmremRenderTarget: THREE.WebGLRenderTarget | null = null;
   private _needsUpdate: boolean = true;
 
-  public pbrEnvMap: THREE.Texture | null = null;
+  public pbrEnvMap: THREE.CubeTexture | null = null;
+
   constructor(renderer: THREE.WebGLRenderer, envMap0: THREE.Texture, envMap1: THREE.Texture) {
+    this._renderer = renderer;
     this._pmremGenerator = new THREE.PMREMGenerator(renderer);
     this._pmremGenerator.compileEquirectangularShader();
+
+    envMap0.mapping = THREE.EquirectangularReflectionMapping;
+    envMap1.mapping = THREE.EquirectangularReflectionMapping;
 
     this._mixMaterial = new THREE.ShaderMaterial({
       uniforms: {
@@ -48,17 +62,18 @@ class Environment {
         varying vec2      vUv;
 
         void main() {
-            vec4 col0 = texture(tEnv0, vUv);
-            vec4 col1 = texture(tEnv1, vUv);
-            // gl_FragColor = vec4(mix(col0, col1, weight) * intensity, 1.);
-            gl_FragColor = vec4(mix(col0.rgb, col1.rgb, weight) * intensity, mix(col0.a, col1.a, weight));
+            vec3 col0 = texture(tEnv0, vUv).rgb;
+            vec3 col1 = texture(tEnv1, vUv).rgb;
+            gl_FragColor = vec4(mix(col0, col1, weight) * intensity, 1.);
         }
-        `,
+      `,
     });
+
+    this._fullScreenQuad = new FullScreenQuad(this._mixMaterial);
 
     // 创建渲染目标 (使用与输入环境贴图相同的分辨率)
     const size = envMap0.source.data as SourceData;
-    this._renderTarget = new THREE.WebGLRenderTarget(size.width, size.height, {
+    this._renderTarget = new THREE.WebGLRenderTarget(size.width || 1024, size.height || 512, {
       magFilter: THREE.LinearFilter,
       minFilter: THREE.LinearFilter,
       generateMipmaps: false,
@@ -67,18 +82,8 @@ class Environment {
       colorSpace: THREE.SRGBColorSpace,
       depthBuffer: false,
     });
-    this._renderTarget.texture.mapping = THREE.CubeUVReflectionMapping;
-
-    /**
-     * 在 GPU 里创建一个临时的离屏画布（WebGLRenderTarget），然后放一张盖满整个画布的方形纸（全屏四边形），
-     * 把两张图塞给自定义 Shader，在上面用数学公式（mix）涂色，最后把这张涂好的画布当成环境贴图给主场景。
-     */
-    this._scene = new THREE.Scene();
-    // 覆盖整个标准化设备坐标 (NDC) 空间
-    this._camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    // 从 (-1,-1) 到 (1,1)，填满整个视口
-    this._fullscreenQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this._mixMaterial);
-    this._scene.add(this._fullscreenQuad);
+    // this._renderTarget.texture.mapping = THREE.CubeUVReflectionMapping;
+    this._renderTarget.texture.mapping = THREE.EquirectangularReflectionMapping;
   }
 
   get intensity(): number {
@@ -103,36 +108,49 @@ class Environment {
     }
   }
 
-  get envMap(): THREE.Texture {
-    return this._renderTarget.texture;
+  get envMap(): THREE.CubeTexture | null {
+    return this.pbrEnvMap;
   }
 
   /**
-   * 更新环境贴图
-   * 必须在每一帧渲染主场景之前调用
+   * 更新环境贴图 在每一帧渲染主场景之前调用
    */
-  update(renderer: THREE.WebGLRenderer): void {
+  update(): boolean {
     if (this._needsUpdate) {
       this._needsUpdate = false;
 
       // 保存当前渲染目标
-      const currentRenderTarget = renderer.getRenderTarget();
+      const currentRenderTarget = this._renderer.getRenderTarget();
+      const currentClearAlpha = this._renderer.getClearAlpha();
 
       // 渲染混合后的环境贴图
-      renderer.setRenderTarget(this._renderTarget);
-      renderer.render(this._scene, this._camera);
-      // 恢复原来的渲染目标
-      renderer.setRenderTarget(currentRenderTarget);
+      this._renderer.setRenderTarget(this._renderTarget);
+      this._renderer.setClearAlpha(0);
+      this._fullScreenQuad.render(this._renderer);
 
-      if (this.pbrEnvMap) this.pbrEnvMap.dispose(); // 释放旧的
+      this._renderTarget.texture.needsUpdate = true;
 
-      //   if (this._pmremGenerator) {
-      const pmremRT = this._pmremGenerator!.fromEquirectangular(this._renderTarget.texture);
-      this.pbrEnvMap = pmremRT.texture;
+      if (this._pmremRenderTarget) {
+        this._pmremRenderTarget.dispose();
+      }
 
-      //   this.pbrEnvMap.dispose();
-      //   }
+      this._pmremRenderTarget = this._pmremGenerator.fromEquirectangular(
+        this._renderTarget.texture
+      );
+      this.pbrEnvMap = this._pmremRenderTarget.texture as THREE.CubeTexture;
+
+      // 恢复渲染状态
+      this._renderer.setRenderTarget(currentRenderTarget);
+      this._renderer.setClearAlpha(currentClearAlpha);
+
+      return true;
     }
+    return false;
+  }
+
+  forceUpdate(): void {
+    this._needsUpdate = true;
+    this.update();
   }
 
   /**
@@ -141,10 +159,13 @@ class Environment {
   dispose(): void {
     this._renderTarget.dispose();
     this._mixMaterial.dispose();
-    this._pmremGenerator?.dispose();
-    this._pmremGenerator = null;
+    this._fullScreenQuad.dispose();
 
-    this._fullscreenQuad.geometry.dispose();
+    this._pmremGenerator.dispose();
+
+    if (this._pmremRenderTarget) {
+      this._pmremRenderTarget.dispose();
+    }
   }
 }
 
@@ -152,7 +173,7 @@ class Environment {
  * 动态环境管理器
  * 提供简化的状态切换和动画控制接口
  */
-class EnvironmentManager {
+export class EnvironmentManager {
   private _dynamicEnv: Environment;
   private _renderer: THREE.WebGLRenderer;
   private _scene: THREE.Scene;
@@ -170,13 +191,21 @@ class EnvironmentManager {
     this._dynamicEnv = new Environment(renderer, envMap0, envMap1);
 
     // 初始状态：强度为0，完全不显示
-    this._dynamicEnv.intensity = 0;
+    this._dynamicEnv.intensity = 1;
+    /** 混合权重：0=完全显示envMap0，1=完全显示envMap1 */
     this._dynamicEnv.weight = 0;
 
+    this._dynamicEnv.forceUpdate();
+
     // 设置为场景的环境贴图
-    this._dynamicEnv.update(this._renderer);
-    // 仅影响材质反射
-    this._scene.environment = this._dynamicEnv.envMap;
+    this.updateEnv();
+  }
+
+  private updateEnv(): void {
+    if (this._dynamicEnv.envMap) {
+      this._scene.environment = this._dynamicEnv.envMap;
+      // this._scene.background = this._dynamicEnv.envMap; // scene.background = new THREE.Color(0, 0, 0)
+    }
   }
 
   get dynamicEnv(): Environment {
@@ -191,11 +220,12 @@ class EnvironmentManager {
    * @param intensity 目标强度
    */
   setState(
-    state: 0 | 1 | 2,
+    state: EnvState, // dark / night / light
     duration: number = 1,
     ease: gsap.EaseString = 'power2.inOut',
     intensity: number = 1
   ): void {
+    console.log('setState', state);
     // 停止所有正在进行的动画
     gsap.killTweensOf(this._dynamicEnv);
 
@@ -220,8 +250,6 @@ class EnvironmentManager {
       duration,
       ease,
       ...targetParams,
-      // 动画每一帧更新环境贴图
-      //   onUpdate: () => this.update(),
     });
   }
 
@@ -230,24 +258,10 @@ class EnvironmentManager {
    * 必须在每一帧渲染主场景之前调用
    */
   update(): void {
-    this._dynamicEnv.update(this._renderer);
-    if (this._scene.environment !== this._dynamicEnv.pbrEnvMap) {
-      // 仅影响材质反射
-      this._scene.environment = this._dynamicEnv.pbrEnvMap;
+    const isUpdated = this._dynamicEnv.update();
+    if (isUpdated) {
+      this.updateEnv();
     }
-
-    // const currentEnvMap = this._dynamicEnv.envMap; // 拿到混合后的 WebGLRenderTarget 纹理
-
-    // if (currentEnvMap) {
-    //   // 背景纹理的映射方式必须是经纬度全景图映射
-    //   if (currentEnvMap.mapping !== THREE.EquirectangularReflectionMapping) {
-    //     currentEnvMap.mapping = THREE.EquirectangularReflectionMapping;
-    //   }
-
-    //   if (this._scene.background !== currentEnvMap) {
-    //     this._scene.background = currentEnvMap;
-    //   }
-    // }
   }
 
   /**
@@ -258,7 +272,8 @@ class EnvironmentManager {
     if (this._scene.environment === this._dynamicEnv.envMap) {
       this._scene.environment = null;
     }
+    if (this._scene.background === this._dynamicEnv.envMap) {
+      this._scene.background = null;
+    }
   }
 }
-
-export { EnvironmentManager };

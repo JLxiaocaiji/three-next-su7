@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import gsap from 'gsap';
 import type { ModelMeshData, ModelGroup } from '@/types/model';
 import { CacheKey } from '@/types/index';
 import { getFileSize } from '@/utils';
@@ -45,23 +46,31 @@ interface SpeedUpModel {
   lerpStrength: number;
 }
 
-// 模型基础接口
-interface BaseModel {
-  model: THREE.Object3D | null;
-}
-
-// 位移动画模型（weiyiModel）
-export interface PositionRotationModel extends BaseModel {
+// 尾翼模型（weiyiModel）
+export interface PositionRotationModel {
   originPos: THREE.Vector3;
   originRotZ: number;
   targetPos: THREE.Vector3;
   targetRotZ: number;
+  visibility: number;
+  model: THREE.Object3D | null;
 }
 
 // 带材质 + 显隐控制模型
-export interface VisibilityMaterialModel extends BaseModel {
-  materials: THREE.MeshStandardMaterial | null;
+export interface VisibilityMaterialModel {
+  materials: THREE.MeshStandardMaterial | THREE.ShaderMaterial | null;
   visibility: number;
+  model: THREE.Object3D | null;
+}
+
+export interface SimpleModel {
+  car1: THREE.Object3D | null;
+  car2: THREE.Object3D | null;
+  length: number;
+  visibility: number;
+  moveParams1: THREE.Vector3;
+  moveParams2: THREE.Vector3;
+  model: THREE.Object3D | null;
 }
 
 // 只有材质 + 显隐（无model）
@@ -146,6 +155,8 @@ export class ModelManager {
   // 反射平面
   public reflectorPlane: Reflector | null = null;
 
+  private static readonly _tempVec3 = new THREE.Vector3();
+
   // 加速相关（车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果）
   public carSpeedUp: SpeedUpModel = {
     wheels: null,
@@ -161,6 +172,7 @@ export class ModelManager {
     originRotZ: 0,
     targetPos: new THREE.Vector3(-2.3626, 1.1511, 0),
     targetRotZ: (-12.9 / 360) * Math.PI * 2,
+    visibility: 0,
   };
 
   // sm_car_lightbar
@@ -202,7 +214,7 @@ export class ModelManager {
   public carRadarPointModel = {
     visibility: 0,
     materials: null as THREE.ShaderMaterial | null,
-    instancedMesh: null as THREE.InstancedMesh | null,
+    model: null as THREE.InstancedMesh | null,
   };
 
   // sm_carradar
@@ -213,13 +225,14 @@ export class ModelManager {
   };
 
   // sm_simpleCar
-  private simpleCarData = {
+  public simpleCarData: SimpleModel = {
     car1: null as THREE.Object3D | null,
     car2: null as THREE.Object3D | null,
     length: 17, // 移动边界长度
     visibility: 0,
     moveParams1: new THREE.Vector3(),
     moveParams2: new THREE.Vector3(),
+    model: null,
   };
 
   private constructor() {
@@ -685,19 +698,19 @@ export class ModelManager {
 
   // 设置 weiyi 模型位置
   public setWeiYiPosition(value: number) {
-    if (!this.weiyiModel) return;
+    if (!this.weiyiModel || !this.weiyiModel.model) return;
 
     const { model, originPos, targetPos, originRotZ, targetRotZ } = this.weiyiModel;
 
-    value = THREE.MathUtils.clamp(value, 0, 1);
+    this.weiyiModel.visibility = THREE.MathUtils.clamp(value, 0, 1);
 
     // 位置插值
     const tempPos = new THREE.Vector3();
-    tempPos.copy(originPos).lerp(targetPos, value);
+    tempPos.copy(originPos).lerp(targetPos, this.weiyiModel.visibility);
     model!.position.copy(tempPos);
 
     // 旋转插值
-    model!.rotation.z = THREE.MathUtils.lerp(originRotZ, targetRotZ, value);
+    model.rotation.z = THREE.MathUtils.lerp(originRotZ, targetRotZ, this.weiyiModel.visibility);
   }
 
   // 初始化 sm_car_lightbar
@@ -935,7 +948,7 @@ export class ModelManager {
     }
     this.sceneManager.scene.add(instancedMesh);
 
-    this.carRadarPointModel.instancedMesh = instancedMesh;
+    this.carRadarPointModel.model = instancedMesh;
     if (!pointMaterial) return;
     this.carRadarPointModel.materials = pointMaterial;
 
@@ -944,13 +957,13 @@ export class ModelManager {
 
   // 0~1 控制雷达点显示/透明度
   public setRadarPointsVisibility(value: number) {
-    const { instancedMesh, materials } = this.carRadarPointModel;
-    if (!instancedMesh || !materials) return;
+    const { model, materials } = this.carRadarPointModel;
+    if (!model || !materials) return;
 
     value = THREE.MathUtils.clamp(value, 0, 1);
     this.carRadarPointModel.visibility = value;
 
-    instancedMesh.visible = value >= 0.005;
+    model.visible = value >= 0.005;
     materials.uniforms.opacity.value = value;
   }
 
@@ -1002,6 +1015,7 @@ export class ModelManager {
     }
     this.sceneManager?.scene.add(model);
 
+    this.simpleCarData.model = model;
     this.simpleCarData.car1 = car1;
     this.simpleCarData.car2 = car2;
 
@@ -1051,7 +1065,8 @@ export class ModelManager {
   }
 
   public setSimpleCarVisibility(value: number): void {
-    const model = this.modelCache.get('sm_simpleCar' as CacheKey);
+    const { model } = this.simpleCarData;
+
     if (!model) return;
 
     this.simpleCarData.visibility = value;
@@ -1061,5 +1076,58 @@ export class ModelManager {
     const meshData = model?.userData?.meshData as ModelMeshData;
 
     meshData.materials.m_simpleCar.opacity = value; // Ag
+  }
+
+  // 淡出 / 角度（1 → 0）
+  public hideModel(
+    model: PositionRotationModel | VisibilityMaterialModel | SimpleModel,
+    func: (value: number) => void,
+    duration: number = 1,
+    delay: number = 0
+  ) {
+    if (!model) {
+      console.error('showModel: model is null');
+      return;
+    }
+    gsap.killTweensOf(model, { visibility: true }, false);
+    gsap.to(model, {
+      duration,
+      delay,
+      visibility: 0,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        func(model.visibility);
+      },
+      onComplete: () => {
+        func(0);
+      },
+    });
+  }
+
+  // 淡出 / 角度（0 → 1）
+  public showModel(
+    model: PositionRotationModel | VisibilityMaterialModel | SimpleModel,
+    func: (value: number) => void,
+    duration: number = 1,
+    delay: number = 0
+  ) {
+    if (!model) {
+      console.error('showModel: model is null');
+      return;
+    }
+
+    gsap.killTweensOf(model, { visibility: true }, false);
+    gsap.to(model, {
+      duration: duration,
+      delay: delay,
+      visibility: 1,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        func(model.visibility);
+      },
+      onComplete: () => {
+        func(1);
+      },
+    });
   }
 }

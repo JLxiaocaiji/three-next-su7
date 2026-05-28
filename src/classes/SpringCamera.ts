@@ -14,8 +14,8 @@ interface SpringCameraOptions {
 
 export class SpringCamera {
   public camera: THREE.PerspectiveCamera;
-
-  private enablePositionNoise = true;
+  public enabled = true;
+  public enablePositionNoise = true;
   private positionFrequency = 1.5;
   private positionAmplitude = 0.04;
   public positionScale = new THREE.Vector3(1, 1, 1);
@@ -99,62 +99,60 @@ export class SpringCamera {
     delay = 0
   ): Promise<boolean> {
     return new Promise((resolve, reject) => {
+      this.enabled = true;
       const startQuat = new THREE.Quaternion().setFromEuler(this._rotation);
       const endQuat = new THREE.Quaternion().setFromEuler(targetRot);
       const currentQuat = new THREE.Quaternion();
 
       gsap.killTweensOf(this);
-
-      // gsap.to(this, {
-      //   'lookAt.x': targetLookAt.x,
-      //   'lookAt.y': targetLookAt.y,
-      //   'lookAt.z': targetLookAt.z,
-      //   springLength: springLength,
-      //   progress: 1,
-      //   duration,
-      //   delay,
-      //   ease,
-      //   onUpdate: function (this: any) {
-      //     const ratio = this.ratio;
-
-      //     currentQuat.copy(startQuat).slerp(endQuat, ratio);
-
-      //     _tempEuler.setFromQuaternion(currentQuat, 'YZX');
-      //     this.targets()[0].rotation.copy(_tempEuler);
-      //   },
-      //   onComplete: () => resolve(true),
-      // });
+      gsap.killTweensOf(this._lookAt);
 
       const tweenObj = { progress: 0 };
-
-      gsap.to(tweenObj, {
-        progress: 1,
-        duration,
-        delay,
-        ease,
-        // 直接动画类中的其他矢量值
-        onStart: () => {
-          // 如果想平滑，也可以顺便把 lookAt 和长度一起加入动效
-          gsap.to(this._lookAt, {
+      gsap.killTweensOf(tweenObj);
+      gsap
+        .timeline()
+        .delay(delay)
+        .to(
+          this._lookAt,
+          {
             x: targetLookAt.x,
             y: targetLookAt.y,
             z: targetLookAt.z,
             duration,
             ease,
-          });
-          gsap.to(this, { _springLength: springLength, duration, ease });
-        },
-        onUpdate: () => {
-          // 使用明确的 progress 值控制四元数插值 (Slerp)
-          currentQuat.copy(startQuat).slerp(endQuat, tweenObj.progress);
-          this._rotation.setFromQuaternion(currentQuat, 'YZX');
-        },
-        onComplete: () => resolve(true),
-      });
+          },
+          0
+        )
+        .to(
+          this,
+          {
+            _springLength: springLength,
+            duration,
+            ease,
+          },
+          0
+        )
+        .to(
+          tweenObj,
+          {
+            progress: 1,
+            duration,
+            ease,
+            onUpdate: () => {
+              // 正确执行四元数球面插值
+              currentQuat.copy(startQuat).slerp(endQuat, tweenObj.progress);
+              this._rotation.setFromQuaternion(currentQuat, 'YZX');
+            },
+          },
+          0
+        )
+        .call(() => resolve(true))
+        .play();
     });
   }
 
   calculateCameraPosition() {
+    // this._tempEuler.copy(this.rotation);
     this._tempEuler.set(0, this.rotation.y, this.rotation.z);
     this._tempVec3
       .set(1, 0, 0)
@@ -164,8 +162,9 @@ export class SpringCamera {
     this.targetCameraPosition.copy(this._tempVec3);
   }
 
-  // 每帧更新（requestAnimationFrame 中调用）
+  // 每帧更新
   update(delta: number): void {
+    if (!this.enabled) return;
     this.calculateCameraPosition();
     this.camera.position.copy(this.targetCameraPosition);
     this.camera.lookAt(this._lookAt);
