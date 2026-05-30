@@ -195,6 +195,7 @@ void main(){
 
     // 输出最终颜色（带透明度）
     gl_FragColor = vec4(outColor, opacity);
+    // gl_FragColor = vec4(streetCol, 1.0); return;
 
     // ====================== 12. Three.js 后期处理 ======================
     // 色调映射

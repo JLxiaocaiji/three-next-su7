@@ -20,6 +20,10 @@ interface State {
   currentModule: Module;
   setCurrentModule: (module: Module) => void;
 
+  // 点击效果
+  isClickEffect: boolean;
+  setClickEffect: (isClickEffect: boolean) => void;
+
   cleanup: () => void;
 }
 
@@ -59,11 +63,9 @@ export const useStore = create<State>()(
   )
 );
 
-const store = useStore.getState();
-
 // 获取当前模块
 const getCurrentModule = () => {
-  const currentModule = store.currentModule;
+  const currentModule = useStore.getState().currentModule;
   eventBus.emit('GetCurrentModule', { module: currentModule });
 };
 eventBus.off('GetCurrentModule', getCurrentModule);
@@ -71,13 +73,23 @@ eventBus.on('GetCurrentModule', getCurrentModule);
 
 // 更改模块
 const changeModule = ({ module: module }: { module: Module }) => {
-  store.setCurrentModule(module);
+  useStore.getState().setCurrentModule(module);
 
   const sceneManager = SceneManager.getInstance();
   sceneManager.handleModuleChange(module);
 };
 eventBus.off('ChangeModule', changeModule);
 eventBus.on('ChangeModule', changeModule);
+
+// 是否点击 / 按压屏幕
+const setClickEffect = ({ isClickEffect: isClickEffect }: { isClickEffect: boolean }) => {
+  useStore.getState().setClickEffect(isClickEffect);
+
+  const sceneManager = SceneManager.getInstance();
+  sceneManager.handleClickEffect(isClickEffect);
+};
+eventBus.off('SetClickEffect', setClickEffect);
+eventBus.on('SetClickEffect', setClickEffect);
 
 useStore.setState({
   cleanup: () => {
@@ -87,7 +99,7 @@ useStore.setState({
 });
 
 export const cleanupAllStores = () => {
-  store.cleanup();
+  useStore.getState().cleanup();
   import('./useScreenshotStore').then(({ useScreenshotStore }) => {
     useScreenshotStore.getState().cleanup();
   });

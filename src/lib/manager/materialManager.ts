@@ -576,8 +576,6 @@ export class MaterialManager {
   public initCarMaterial(meshData: ModelMeshData): void {
     if (!meshData?.meshes) return;
 
-    const mesh = meshData.meshes;
-
     Object.values(meshData.meshes).forEach((item: THREE.Mesh) => {
       item.layers.enable(sceneConfig.LAYER_PLANE_REFLECT);
     });

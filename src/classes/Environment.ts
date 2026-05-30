@@ -229,7 +229,7 @@ export class EnvironmentManager {
     // 停止所有正在进行的动画
     gsap.killTweensOf(this._dynamicEnv);
 
-    let targetParams: { intensity: number; weight: number };
+    let targetParams: { intensity: number; weight: number } = { intensity: 1, weight: 0 };
 
     switch (state) {
       // 状态0：完全关闭环境

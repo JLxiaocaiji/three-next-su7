@@ -13,7 +13,7 @@ export class CarMotionManager {
   private _targetVelocity: number = 0;
   private _currentVelocity: number = 0;
   private _lerpStrength: number = 1;
-  private _springCameraOB: CameraManager; // 弹簧相机控制器
+  private _cameraManager: CameraManager; // 弹簧相机控制器
   private tempVec3: THREE.Vector3 = new THREE.Vector3();
 
   private currentModule: Module = 0;
@@ -23,7 +23,7 @@ export class CarMotionManager {
 
   // 传入：车轮根节点、弹簧相机实例
   constructor(carModelCache: THREE.Group, springCameraOB: CameraManager) {
-    this._springCameraOB = springCameraOB;
+    this._cameraManager = springCameraOB;
 
     if (!carModelCache.children.length) return;
     this._wheels =
@@ -51,14 +51,14 @@ export class CarMotionManager {
       this.currentModule = module;
       return;
     }
-    const temp = await new Promise<Module | null>((resolve) => {
-      // 1. 监听返回事件
-      eventBus.on('GetCurrentModule', ({ module: module }: { module: Module }) => {
-        resolve(module);
-      });
-    });
+    // const temp = await new Promise<Module | null>((resolve) => {
+    //   // 1. 监听返回事件
+    //   eventBus.on('GetCurrentModule', ({ module: module }: { module: Module }) => {
+    //     resolve(module);
+    //   });
+    // });
 
-    this.currentModule = temp || 0;
+    // this.currentModule = temp || 0;
   }
 
   // 每帧更新（对应原 update）
@@ -97,9 +97,9 @@ export class CarMotionManager {
     this.u_speedUpBackgroundValue.value = speedUpBackgroundValue;
 
     this.tempVec3.set(1, 1, 1).multiplyScalar(speedUpBackgroundValue / 5);
-    this._springCameraOB._springCamera.positionScale.copy(this.tempVec3);
+    this._cameraManager._springCamera.positionScale.copy(this.tempVec3);
 
-    // // 速度足够大时显示加速特效
+    //  速度足够大时显示加速特效
     sceneConfig.sm_speedup.visible = speedUpBackgroundValue >= 0.1;
   }
 }

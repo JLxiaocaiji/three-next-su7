@@ -10,11 +10,11 @@ import RenderContext from '@/components/RenderContent';
 import LoadingProgress from '@/components/LoadingProgress';
 import ScreenShot from '@/components/ScreenShot';
 
+import { useCurrentModule, useUser } from '@/store';
 import { eventBus } from '@/utils/eventBus';
 export default function Page() {
   const [loadingProgress, setLoadingProgress] = useState(0);
-
-  const [part, setPart] = useState(0);
+  const currentModule = useCurrentModule();
 
   useEffect(() => {
     // const manager = ModelManager.getInstance();
@@ -40,9 +40,9 @@ export default function Page() {
 
       {/* header */}
       <Header />
-      <LeftCustomization part={part} />
-      <RightContent part={part} setPart={setPart} />
-      <Bottom part={part} />
+      <LeftCustomization currentModule={currentModule} />
+      <RightContent currentModule={currentModule} />
+      <Bottom currentModule={currentModule} />
 
       <ScreenShot />
     </>

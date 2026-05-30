@@ -125,6 +125,19 @@ export class CameraManager {
   set springLength(v: number) {
     this._targetSpringLength = v;
   }
+
+  set _springlengthOffset(v: number) {
+    this.springlengthOffset = v;
+  }
+
+  set _lerpStrength(v: number) {
+    this.lerpStrength = v;
+  }
+
+  set _moveSpeed(v: [number, number]) {
+    this.moveSpeed = v;
+  }
+
   get enableControlCamera() {
     return this._enableControlCamera;
   }
@@ -404,7 +417,14 @@ export class CameraManager {
     gsap.killTweensOf(this);
     gsap.killTweensOf(this._springCamera);
     gsap.killTweensOf(this._springCamera.lookAt);
-    this.reset();
+
+    // this.reset();
+    this._button = -1;
+    this._touchID = -1;
+    this._deltaRotation.set(0, 0, 0);
+    this.isAnimatingPOI = false;
+
+    this.switchToSpringMode();
 
     // 旋转插值强度先设为 0
     this._lerpQuatStrength = 0;
@@ -414,6 +434,9 @@ export class CameraManager {
       _lerpQuatStrength: 5,
       duration: 1,
       ease: 'none',
+      onComplete: () => {
+        this.switchToOrbitMode();
+      },
     });
 
     this.springLength = springLength;

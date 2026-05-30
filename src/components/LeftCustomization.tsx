@@ -25,16 +25,14 @@ const custom = {
   rough: 0.03,
   metal: 0.1,
 };
-export default function LeftCustomization({ part }: { part: number }) {
+export default function LeftCustomization({ currentModule }: { currentModule: number }) {
   const [hsva, setHsva] = useState({ h: 0, s: 0, v: 0, a: 1 });
 
   const [color, setColor] = useState('#4a86ff');
 
   const [value, setValue] = useState(20);
 
-  const currentModule = useStore((state) => state.currentModule);
-
-  const isVisible = currentModule === 4;
+  const isVisible = currentModule === 5;
 
   return (
     <>

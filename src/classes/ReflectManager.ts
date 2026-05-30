@@ -30,6 +30,8 @@ export class ReflectManager {
     this._mainCamera = mainCamera;
     this._renderer = renderer;
     this.reflectMesh = reflectMesh;
+
+    console.log('this.reflectMesh', this.reflectMesh);
     this._clipBias = clipBias;
 
     this.camera = new THREE.PerspectiveCamera(
@@ -56,6 +58,12 @@ export class ReflectManager {
 
     this._renderTexture.texture.colorSpace = THREE.SRGBColorSpace;
     this._renderTexture.texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const geometry = reflectMesh.geometry;
+    if (geometry && geometry.attributes.uv1 && !geometry.attributes.uv2) {
+      // uv2 直接指向 uv1 的内存数据
+      geometry.setAttribute('uv2', geometry.attributes.uv1);
+    }
 
     this.material = this.createReflectMaterial(reflectMesh) as THREE.ShaderMaterial;
 
@@ -129,6 +137,8 @@ export class ReflectManager {
 
     // 获取网格的原始材质
     const originalMaterial = mesh.material as THREE.MeshPhysicalMaterial;
+
+    console.log('originalMaterial', originalMaterial);
 
     // 若存在原始标准材质，继承其属性到Shader材质
     if (originalMaterial) {

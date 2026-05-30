@@ -28,11 +28,11 @@ export class BoxProjectionProbe {
     this._renderer = renderer;
     this._node = node;
 
-    const worldMatrix = this._node.matrixWorld.clone();
-    this._node.matrixWorld.identity();
+    // const worldMatrix = this._node.matrixWorld.clone();
+    // this._node.matrixWorld.identity();
     this.boundingBox.setFromObject(this._node);
-    this._node.matrixWorld.copy(worldMatrix);
-    this._node.updateMatrixWorld(true);
+    // this._node.matrixWorld.copy(worldMatrix);
+    // this._node.updateMatrixWorld(true);
 
     // 2. 如果probeBox为空，复制boundingBox
     if (this.probeBox.isEmpty()) {
@@ -48,15 +48,16 @@ export class BoxProjectionProbe {
     // for (let material of Object.values(this._node.userData.meshData.materials)) {
     //   if (material instanceof THREE.MeshStandardMaterial) {
     //     // 启 USE_BOX_PROJECTION 宏
+    //     // node_modules\three\src\renderers\shaders\ShaderLib.js
     //     material.defines!.USE_BOX_PROJECTION = '';
     //   }
     // }
   }
 
   /**
-   * 每帧更新（对应原 update 方法）
+   * 每帧更新
    */
-  public update(): void {
+  public update(deltaTime: number): void {
     if (!this.needUpdate) return;
 
     // 重置更新标记
@@ -83,8 +84,6 @@ export class BoxProjectionProbe {
     }
   }
 
-  //  Getter / Setter 完全还原原代码
-  /** 调试模式开关 */
   get debug(): boolean {
     return this._debug;
   }

@@ -14,6 +14,11 @@ type Events = {
   // 获取当前模块
   GetCurrentModule: { module: Module };
 
+  // 点击 / 按压屏幕
+  SetClickEffect: { isClickEffect: boolean };
+  // 获取当前是否处于点击状态
+  GetClickEffect: { isClickEffect: boolean };
+
   // 颜色切换
   ChangeColor: { param: 'custom' | string | 0 };
   // 改变UI颜色参数
@@ -43,9 +48,6 @@ type Events = {
   'ScreenshotManager:complete': { picUrl: string; width: number; height: number; visible: boolean };
   // ScreenshotManager 反馈给 UI 的状态
   'ScreenshotManager:status': { isSaving: boolean; picUrl?: string };
-
-  // 点击 / 按压屏幕
-  clickEffect: { isclickEffect: boolean };
 };
 
 export const eventBus = mitt<Events>();

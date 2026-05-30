@@ -2,26 +2,19 @@
 
 import { useTap } from '@/hook/index';
 import { eventBus } from '@/utils/eventBus';
-export default function RightContent({
-  part,
-  setPart,
-}: {
-  part: Module;
-  setPart: (part: Module) => void;
-}) {
-  type Part = { stepLabel: string; partId: Module };
+export default function RightContent({ currentModule }: { currentModule: Module }) {
+  type Part = { stepLabel: string; currentModule: Module };
 
   const partList: Part[] = [
-    { stepLabel: 'SU7', partId: 0 },
-    { stepLabel: '车身', partId: 1 },
-    { stepLabel: '风阻', partId: 2 },
-    { stepLabel: '雷达', partId: 3 },
-    { stepLabel: '定制', partId: 4 },
+    { stepLabel: 'SU7', currentModule: 1 },
+    { stepLabel: '车身', currentModule: 2 },
+    { stepLabel: '风阻', currentModule: 3 },
+    { stepLabel: '雷达', currentModule: 4 },
+    { stepLabel: '定制', currentModule: 5 },
   ];
 
   const tap = useTap((e: Part) => {
-    setPart(e.partId);
-    eventBus.emit('ChangeModule', { module: e.partId });
+    eventBus.emit('ChangeModule', { module: e.currentModule });
   });
 
   return (
@@ -35,13 +28,18 @@ export default function RightContent({
             <div
               onClick={() => tap(item)}
               className="item"
-              key={item.partId}
-              style={item.partId === part ? { backgroundColor: 'rgb(255, 146, 69)' } : {}}
+              key={item.currentModule}
+              style={
+                item.currentModule === currentModule ? { backgroundColor: 'rgb(255, 146, 69)' } : {}
+              }
             >
+              {item.currentModule === currentModule ? <div className="item-Line" /> : null}
               <div className="tableName">
                 <div
                   style={
-                    item.partId === part ? { color: 'rgb(255, 255, 255)', fontSize: '0.9rem' } : {}
+                    item.currentModule === currentModule
+                      ? { color: 'rgb(255, 255, 255)', fontSize: '0.9rem' }
+                      : {}
                   }
                 >
                   {item.stepLabel}
