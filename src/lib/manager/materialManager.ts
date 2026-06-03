@@ -1,6 +1,6 @@
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import * as THREE from 'three';
-import { getFileSize } from '@/utils';
+import { getFileSize, isEmptyObject } from '@/utils';
 import { SceneManager } from './sceneManager';
 import type { ModelMeshData, ModelGroup } from '@/types/model';
 import { sceneConfig, textureObj } from './constantsConfig';
@@ -9,9 +9,7 @@ import { sceneConfig, textureObj } from './constantsConfig';
 import { noise2d } from '@/shaders/noise2d';
 import { customVertexShader } from '@/shaders/customVertexShader';
 import { randomColorShader } from '@/shaders/randomColorShader';
-import { reflectVertexShader } from '@/shaders/reflectVertexShader';
-import { reflectFragmentShader } from '@/shaders/reflectFragmentShader';
-import { ShaderUniformLib } from '@/lib/constants';
+import type { WebGLShader, WebGLUniforms, WebGLProgramParametersWithUniforms } from 'three';
 
 /**
  * 材质管理器
@@ -62,6 +60,11 @@ enum TextureType {
   jpeg = 'jpeg',
 }
 
+interface GlobalTimeUniforms {
+  u_time: THREE.IUniform<number>;
+  u_speedTime: THREE.IUniform<number>;
+}
+
 export class MaterialManager {
   private static instance: MaterialManager;
   private materials: Map<string, THREE.MeshStandardMaterial> = new Map();
@@ -90,8 +93,8 @@ export class MaterialManager {
       config: {
         flipY: false,
         colorSpace: THREE.NoColorSpace,
-        minFilter: THREE.NearestFilter,
-        magFilter: THREE.NearestFilter,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
       },
     },
     {
@@ -185,7 +188,6 @@ export class MaterialManager {
   public blurTexture: { value: THREE.CubeTexture | null } = { value: null };
   private blurIntensity: number = 4.5;
   private exposure: number = 1.0;
-  private _globalUniforms: Record<string, THREE.IUniform> = { u_time: { value: 0 } };
 
   // 纯白
   public ut_white: THREE.Texture = new THREE.DataTexture(
@@ -203,8 +205,6 @@ export class MaterialManager {
     THREE.RGBAFormat,
     THREE.FloatType
   );
-  // 地板贴图
-  public ut_floorMap: THREE.Texture | null = null;
   // 车窗原始数据
   public u_m_car_window_orignData: { opacity: number; roughness: number; color: THREE.Color } = {
     opacity: 0,
@@ -231,15 +231,22 @@ export class MaterialManager {
 
   public smcar_carbody: THREE.MeshStandardMaterial | null = null;
 
+  public global_time_uniforms: GlobalTimeUniforms = {
+    u_time: { value: 0 },
+    u_speedTime: { value: 0 },
+  };
+  // speed_up
+  private u_speedUpBackgroundValue: { value: number } = { value: 0 };
+
   private constructor() {
     this.textureConfig.sort((a, b) => a.priority - b.priority);
 
     this.ut_white.needsUpdate = true;
     this.ut_dark.needsUpdate = true;
-    this.ut_floorMap = this.ut_white;
 
     sceneConfig.ut_white.value = this.ut_white;
-    sceneConfig.ut_floorMap.value = this.ut_white;
+    sceneConfig.ut_floorMap = { value: this.ut_white };
+
     sceneConfig.ut_dark.value = this.ut_dark;
 
     this.textureCache.set('ut_white', this.ut_white);
@@ -262,7 +269,6 @@ export class MaterialManager {
         this._renderer = this.sceneManager.renderer;
         this._cubeCamera = this.sceneManager.cubeCamera;
         this._cubeRenderTarget = this.sceneManager.cubeRenderTarget;
-        this._globalUniforms.u_time = this.sceneManager.globalUniforms.u_time;
 
         this.pmremGenerator = new THREE.PMREMGenerator(this._renderer);
         this.pmremGenerator.compileEquirectangularShader();
@@ -432,8 +438,6 @@ export class MaterialManager {
     if (!this.ensureSceneManager() || !this._renderer || !this._scene) return;
 
     let hdrTexture = this.textureCache.get(hdrName) as THREE.Texture | undefined;
-
-    console.log('MaterialManager: 初始化环境贴图', hdrTexture);
 
     if (!hdrTexture) {
       console.warn(`MaterialManager: HDR 纹理 ${hdrName} 未在缓存中，尝试直接加载`);
@@ -885,12 +889,11 @@ export class MaterialManager {
           // 最终自发光 = 超强基础发光 + 扫描线遮罩发光
           // emissiveColor.rgb * 50.0 → 亮度放大50倍
           // scanLine → 控制哪里亮、哪里不亮
-          totalEmissiveRadiance = emissiveColor.rgb * 50.0 
-                                + totalEmissiveRadiance * emissiveColor.rgb * scanLine;
+          totalEmissiveRadiance =  emissiveColor.rgb*50.+totalEmissiveRadiance*emissiveColor.rgb * (step((cos(vUv2.x*10.+timer*20.)+1.),0.5)+0.);
         #endif
       `
     );
-    t.uniforms.timer = this._globalUniforms.u_time.value;
+    t.uniforms.timer = this.global_time_uniforms.u_time;
     t.vertexShader = vertexShader;
     t.fragmentShader = fragmentShader;
   }
@@ -899,7 +902,9 @@ export class MaterialManager {
   public initStartroomMaterial(meshData: ModelMeshData): void {
     Object.values(meshData.materials).forEach((item: THREE.MeshStandardMaterial) => {
       item.aoMap = sceneConfig.ut_startroom_ao.value; // AO贴图
+      // item.aoMap!.channel = 1;
       item.lightMap = sceneConfig.ut_startroom_light.value; // 光照贴图（预计算光照）
+      // item.lightMap!.channel = 1;
       item.normalMap = sceneConfig.ut_floor_normal.value; // 法线贴图（表面凹凸）
       item.roughnessMap = sceneConfig.ut_floor_roughness.value; // 粗糙度贴图
       item.envMapIntensity = 0; // 关闭环境反射（房间不反射环境）
@@ -908,15 +913,11 @@ export class MaterialManager {
 
   // sm_speedup
   public initSpeedupMaterial(meshData: ModelMeshData): void {
-    if (!this.sceneManager) {
-      console.warn('this.sceneManager!.u_speedTime', this.sceneManager);
-    }
-
     let material = new THREE.ShaderMaterial({
       // 着色器统一变量（外部可动态传入的参数）
       uniforms: {
-        time: this.sceneManager!.globalUniforms.u_speedTime, // 时间：驱动流动动画
-        vSpeed: sceneConfig.u_speedUpBackgroundValue, // 车辆速度：控制光效强度
+        time: this.global_time_uniforms.u_speedTime, // 时间：驱动流动动画
+        vSpeed: this.u_speedUpBackgroundValue, // 车辆速度：控制光效强度
         vPoliceColorChange: sceneConfig.u_policeColorChange, // 警灯模式开关：0=普通流光 1=警灯
       },
       vertexShader: customVertexShader, // 外部传入的顶点着色器（传递顶点位置、UV、法线）
@@ -1000,8 +1001,8 @@ export class MaterialManager {
   }
 
   // sm_curvature -> 曲率
-  public initCurvatureMaterial(meshData: THREE.Mesh): THREE.ShaderMaterial {
-    const shaderMaterial = new THREE.ShaderMaterial({
+  public initCurvatureMaterial(meshData: ModelMeshData) {
+    let material = new THREE.ShaderMaterial({
       name: 'm_curvature', // 材质名称
 
       // 外部可动态修改的参数（Three.js 传递给 shader）
@@ -1009,7 +1010,7 @@ export class MaterialManager {
         opacity: { value: 1 }, // 整体透明度
         vColor: { value: new THREE.Color('#fdffc7') }, // 发光颜色（淡黄色）
         tSaLine: { value: this.textureCache.get('t_saLine') || null }, // 外部贴图：黑白遮罩线稿（决定线条形状）
-        time: this._globalUniforms.u_time.value, // 时间
+        time: this.global_time_uniforms.u_time, // 时间
       },
 
       vertexShader: customVertexShader, // 顶点着色器
@@ -1055,8 +1056,13 @@ export class MaterialManager {
       transparent: true, // 开启透明：只有线条发光，其余区域透明
     });
 
-    meshData.material = shaderMaterial;
-    return shaderMaterial;
+    meshData.meshes.forEach((item: THREE.Mesh) => {
+      if (item.name === '曲率') {
+        item.material = material;
+        item.layers.enable(sceneConfig.LAYER_CAPTURE);
+      }
+    });
+    meshData.materials.m_curvature = material;
   }
 
   // sm_windspeed -> 风动线
@@ -1074,7 +1080,7 @@ export class MaterialManager {
         vIntensity: { value: 3 }, // 光效亮度强度
         vColor: { value: new THREE.Color('#cdeffe') }, // 光效颜色（淡蓝色）
         tSaLine: { value: this.textureCache.get('t_saLine') || null }, // 线条遮罩贴图
-        time: this._globalUniforms.u_time.value, // 时间（驱动动画）
+        time: this.global_time_uniforms.u_time, // 时间（驱动动画）
         opacity: { value: 1 }, // 整体透明度
       },
       vertexShader: customVertexShader,
@@ -1146,7 +1152,7 @@ export class MaterialManager {
       side: THREE.DoubleSide, // 渲染正反面
     });
     meshData.meshes.forEach((item: THREE.Mesh) => {
-      item.material = material;
+      item.material = material as THREE.ShaderMaterial;
 
       item.layers.enable(sceneConfig.LAYER_CAPTURE);
     });
@@ -1161,7 +1167,7 @@ export class MaterialManager {
 
       uniforms: {
         // 时间：驱动流动动画
-        time: this._globalUniforms.u_time.value,
+        time: this.global_time_uniforms.u_time,
 
         // 透明度：整体控制显示/隐藏
         opacity: { value: 1 },
@@ -1250,7 +1256,7 @@ export class MaterialManager {
       name: 'm_carradar',
 
       uniforms: {
-        time: this._globalUniforms.u_time.value, // 时间：驱动动画
+        time: this.global_time_uniforms.u_time, // 时间：驱动动画
         opacity: { value: 1 }, // 透明度
         uColor: { value: new THREE.Color('#88eeff') }, // 基础颜色：亮蓝色
         uCenter1: sceneConfig.u_simpleCarCenter1, // 雷达中心点1（车前/车后）
@@ -1528,34 +1534,85 @@ export class MaterialManager {
 
   // 雷达点着色器材质
   public getRadarPointMaterial(): THREE.ShaderMaterial {
-    return new THREE.ShaderMaterial({
+    let material = new THREE.ShaderMaterial({
       name: 'm_radarPoints',
       uniforms: {
-        time: { value: 0 },
+        time: this.global_time_uniforms.u_time,
         opacity: { value: 0 },
         vColor: { value: new THREE.Color('#ffffff') },
       },
       vertexShader: `
+            varying vec3 vPosition;
+            varying vec3 vNormal;
             varying vec2 vUv;
+            varying vec3 vPositionW;
+            varying vec3 vNormalW;
+            attribute vec3 color;
+            varying vec3 vColor;
+            varying vec4 viewerUV;
+
             void main() {
-              vUv = uv;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                vPosition = position;
+                vNormal = normalMatrix * normal;
+                vPositionW = vec3( modelMatrix*vec4( position, 1.0 ));
+                vNormalW = normalize( vec3( vec4( normal, 0.0 ) * modelMatrix ) );
+                vUv = uv;
+                vColor=color;
+
+                #ifdef USE_INSTANCING
+                  vPositionW = vec3(instanceMatrix * vec4(vPositionW,1.));
+                  vPosition = vec3(instanceMatrix * vec4(vPosition,1.));
+                #endif
+
+                // 添加面向摄像机的代码
+                vec3 instancePosition = vec3(modelMatrix * vec4(vec3(0.),1.));
+                #ifdef USE_INSTANCING
+                  instancePosition = vec3(instanceMatrix * vec4(vec3(0.),1.));
+                #endif
+
+                vec3 normalFace = vec3(0.,1.,0.);
+                vec3 cameraDir = normalize(cameraPosition.xyz - instancePosition);
+                vec3 vcV = normalize(cross( normalFace,cameraDir ));
+                vec3 vcU = normalize(cross( cameraDir,vcV ));
+                vec3 vcN = normalize(cross( vcV,vcU ));
+                mat3 viewMatrix = mat3( vcV, vcU, vcN );
+                
+                float scale = 1.;
+                #ifdef USE_DISTANCE_SCALING
+                  scale = pow(length(cameraPosition - instancePosition) / 50000., 0.8);
+                #endif
+
+                vec3 mvPosition = viewMatrix * vec3( position * scale);
+                #ifdef USE_INSTANCING
+                  mvPosition.xyz += instancePosition;
+                #endif
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(mvPosition, 1.0);
+                viewerUV = vec4((gl_Position.xyz / gl_Position.w).xy* 0.5 + 0.5,0.,1.);
             }
           `,
       fragmentShader: `
+            varying vec3 vPosition;
+            varying vec3 vNormal;
             varying vec2 vUv;
+            varying vec3 vPositionW;
+            varying vec3 vNormalW;
+
+            uniform float time;
             uniform float opacity;
             uniform vec3 vColor;
+
             void main() {
-              float d = length(vUv - vec2(0.5));
-              float a = smoothstep(d, 0.2, 1.0);
-              gl_FragColor = vec4(vColor, opacity * a);
+                float distanceUV = length(vUv-vec2(0.5,0.5));
+                distanceUV = smoothstep(distanceUV,0.2,1.);
+                gl_FragColor = vec4(vec3(vColor),opacity*distanceUV);
+                // gl_FragColor = vec4(vec3(distanceP),1.);
             }
           `,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
+    return material;
   }
 
   // 获取已存在的材质
@@ -1599,12 +1656,16 @@ export class MaterialManager {
   // ==============================================
   // 更新纹理
   // ==============================================
-  public updateMap(key: string, map: THREE.Texture | null): void {
-    const mat = this.materials.get(key) as any;
-    if (mat) {
-      mat.map = map;
-      mat.needsUpdate = true;
-    }
+  public update(
+    deltaTime: number,
+    elapsedTime: number,
+    u_speedUpBackgroundValue: { value: number }
+  ): void {
+    this.u_speedUpBackgroundValue = u_speedUpBackgroundValue;
+
+    this.global_time_uniforms.u_time.value = elapsedTime;
+    this.global_time_uniforms.u_speedTime.value +=
+      deltaTime * this.u_speedUpBackgroundValue.value * 0.2;
   }
 
   // ==============================================

@@ -22,15 +22,16 @@ export class SpringCamera {
   private positionFractalLevel = 3;
 
   // 内部状态
-  public _time: number[] = [];
+  public _time: number[] = new Array(6).fill(0);
   private readonly _fbmNorm = 1 / 0.75;
   private _springLength = 2;
   private _lookAt = new THREE.Vector3(0, 0.23686, 0);
-  public _rotation = new THREE.Euler(0, -Math.PI / 2, 0);
+  public _rotation = new THREE.Euler(0, -Math.PI / 2, 0, 'YZX');
   readonly targetCameraPosition = new THREE.Vector3();
 
-  private _tempVec3 = new THREE.Vector3();
   private _tempEuler = new THREE.Euler();
+  private _tempVec3 = new THREE.Vector3();
+  private readonly _noiseVec3 = new THREE.Vector3();
   private _tempQuat1 = new THREE.Quaternion();
   private _tempQuat2 = new THREE.Quaternion();
 
@@ -38,7 +39,7 @@ export class SpringCamera {
     near = 0.01,
     far = 100,
     fov = 45,
-    rotation = new THREE.Euler(0, -Math.PI / 2, 0),
+    rotation = new THREE.Euler(0, -Math.PI / 2, 0, 'YZX'),
     lookAt = new THREE.Vector3(),
     springLength = 2,
     camera,
@@ -58,10 +59,9 @@ export class SpringCamera {
     this.camera.lookAt(this._lookAt);
 
     this.rehash();
-
-    console.log('this.camera', this.camera);
   }
 
+  // 生成噪声种子，重置抖动相位
   rehash() {
     for (let i = 0; i < 6; i++) {
       this._time[i] = randFloat(-10000, 0);
@@ -153,7 +153,7 @@ export class SpringCamera {
 
   calculateCameraPosition() {
     // this._tempEuler.copy(this.rotation);
-    this._tempEuler.set(0, this.rotation.y, this.rotation.z);
+    this._tempEuler.set(0, this.rotation.y, this.rotation.z, 'YZX');
     this._tempVec3
       .set(1, 0, 0)
       .applyEuler(this._tempEuler)
@@ -175,14 +175,14 @@ export class SpringCamera {
       this._time[i] += this.positionFrequency * delta;
     }
 
-    this._tempVec3.set(
+    this._noiseVec3.set(
       PerlinNoise.fbm(this.positionFractalLevel, this._time[0]),
       PerlinNoise.fbm(this.positionFractalLevel, this._time[1]),
       PerlinNoise.fbm(this.positionFractalLevel, this._time[2])
     );
 
-    this._tempVec3.multiply(this.positionScale);
-    this._tempVec3.multiplyScalar(this.positionAmplitude * this._fbmNorm);
-    this.camera.position.add(this._tempVec3);
+    this._noiseVec3.multiply(this.positionScale);
+    this._noiseVec3.multiplyScalar(this.positionAmplitude * this._fbmNorm);
+    this.camera.position.add(this._noiseVec3);
   }
 }

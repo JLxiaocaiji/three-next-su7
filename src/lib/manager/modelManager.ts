@@ -13,7 +13,6 @@ import { Reflector } from 'three/addons/objects/Reflector.js';
 import { PerlinNoise, clamp } from '@/utils';
 import { sceneConfig } from './constantsConfig';
 import { SceneManager } from './sceneManager';
-import { MaterialManager } from './materialManager';
 
 export interface ModelFileInfo {
   name: CacheKey;
@@ -118,7 +117,6 @@ const points = [
 export class ModelManager {
   private static instance: ModelManager | null = null;
   public sceneManager: SceneManager | null = null;
-  public materialManager: MaterialManager | null = null;
 
   public gltfLoader: GLTFLoader | null = null;
 
@@ -329,7 +327,7 @@ export class ModelManager {
       }
       this.isLoading = false;
 
-      console.log(this.modelCache);
+      console.log('all moelCache', this.modelCache);
       return results.every((r) => r.success);
     } catch (e) {
       this.isLoading = false;
@@ -639,6 +637,19 @@ export class ModelManager {
             result.textures[texture.uuid] = texture;
           }
         }
+
+        // 添加 uv2
+        let geometry = node.geometry;
+        if (!geometry.attributes.uv2) {
+          // 优先使用uv1，如果没有uv1则使用uv
+          const sourceUV = geometry.attributes.uv1 || geometry.attributes.uv;
+
+          if (sourceUV && sourceUV.array && sourceUV.itemSize === 2) {
+            geometry.setAttribute('uv2', sourceUV.clone());
+          } else {
+            console.warn(`${node.type} ${node.name} 没有有效的UV属性，无法生成uv2`);
+          }
+        }
       }
     });
 
@@ -735,14 +746,16 @@ export class ModelManager {
 
     // 默认关闭灯光
     this.setLightbarVisibility(0);
-    this.lightbarModel.materials && (this.lightbarModel.materials.emissiveIntensity = 500 * 0 + 1);
+    this.lightbarModel.materials &&
+      ((this.lightbarModel.materials as THREE.MeshStandardMaterial).emissiveIntensity =
+        500 * 0 + 1);
   }
-  private updateLightbarIntensity() {
+  public updateLightbarIntensity() {
     const { materials, visibility } = this.lightbarModel;
     if (!materials) return;
 
     // 原组件公式：500 * 透明度 + 1
-    materials.emissiveIntensity = 500 * visibility + 1;
+    (materials as THREE.MeshStandardMaterial).emissiveIntensity = 500 * visibility + 1;
   }
 
   // 设置 sm_car_lightbar.lightbar_Baked 显隐
@@ -859,7 +872,6 @@ export class ModelManager {
     if (!this.sceneManager) {
       this.sceneManager = SceneManager.getInstance();
     }
-    this.sceneManager?.scene.add(model);
 
     // 保存当前值
     this.windSpeedModel.visibility = value;
@@ -919,13 +931,9 @@ export class ModelManager {
   }
 
   // sm_carradar
-  public initCarRadarPointsModel() {
+  public initCarRadarPointsModel(pointMaterial: THREE.ShaderMaterial) {
     // if (this.carRadarPointModel.instancedMesh) return;
-
     const geometry = new THREE.PlaneGeometry(0.1, 0.1);
-
-    const pointMaterial = this.materialManager?.getRadarPointMaterial();
-
     // 实例化
     const instancedMesh = new THREE.InstancedMesh(geometry, pointMaterial, points.length);
     instancedMesh.frustumCulled = false;
@@ -987,7 +995,7 @@ export class ModelManager {
     value = THREE.MathUtils.clamp(value, 0, 1);
     this.carRadarModel.visibility = value;
 
-    sceneConfig.u_floor_typeSwitch.value = value;
+    sceneConfig.u_floor_typeSwitch.value = 0;
 
     model.visible = value >= 0.005;
 

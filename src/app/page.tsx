@@ -39,7 +39,7 @@ export default function Page() {
       <RenderContext setLoadingProgress={setLoadingProgress} />
 
       {/* header */}
-      <Header />
+      <Header currentModule={currentModule} />
       <LeftCustomization currentModule={currentModule} />
       <RightContent currentModule={currentModule} />
       <Bottom currentModule={currentModule} />

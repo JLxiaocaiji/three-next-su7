@@ -5,7 +5,7 @@ export class BoxProjectionProbe {
   private readonly probeBox: THREE.Box3 = new THREE.Box3();
   private readonly _probeCenter: THREE.Vector3 = new THREE.Vector3();
   private _boxProjection: boolean = true;
-  private needUpdate: boolean = true;
+  public needUpdate: boolean = true;
   private _debug: boolean = false;
 
   // 目标模型节点

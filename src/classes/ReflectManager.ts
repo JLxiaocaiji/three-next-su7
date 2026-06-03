@@ -59,12 +59,6 @@ export class ReflectManager {
     this._renderTexture.texture.colorSpace = THREE.SRGBColorSpace;
     this._renderTexture.texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-    const geometry = reflectMesh.geometry;
-    if (geometry && geometry.attributes.uv1 && !geometry.attributes.uv2) {
-      // uv2 直接指向 uv1 的内存数据
-      geometry.setAttribute('uv2', geometry.attributes.uv1);
-    }
-
     this.material = this.createReflectMaterial(reflectMesh) as THREE.ShaderMaterial;
 
     if (this.material) {
@@ -89,6 +83,7 @@ export class ReflectManager {
     const lightUniforms = THREE.UniformsUtils.clone(THREE.UniformsLib['lights']);
     const fogUniforms = THREE.UniformsUtils.clone(THREE.UniformsLib['fog']);
 
+    console.log('textureConfig', sceneConfig.ut_floorMap);
     const baseUniforms: THREE.ShaderMaterial['uniforms'] = {
       // 基础PBR材质属性
       color: { value: new THREE.Color() },
@@ -142,53 +137,55 @@ export class ReflectManager {
 
     // 若存在原始标准材质，继承其属性到Shader材质
     if (originalMaterial) {
-      // 继承基础颜色 + 透明度
-      baseUniforms.color.value = originalMaterial.color;
-      if (originalMaterial.map) {
-        baseUniforms.map.value = originalMaterial.map;
-        shaderDefines.USE_MAP = '';
-      } else {
-        delete shaderDefines.USE_MAP;
+      if (sceneConfig.ut_floorMap && sceneConfig.ut_floorMap.value) {
+        shaderDefines.USE_MAP = true;
       }
-      baseUniforms.opacity.value = originalMaterial.opacity;
+
+      // 继承基础颜色 + 透明度
+      baseUniforms.color = { value: originalMaterial.color };
+      shaderDefines.USE_MAP = '';
+      baseUniforms.opacity = { value: originalMaterial.opacity };
+      // if (originalMaterial.map) {
+      //   baseUniforms.map.value = originalMaterial.map;
+      // }
 
       // 继承 粗糙度贴图
       if (originalMaterial.roughnessMap) {
-        baseUniforms.roughnessMap.value = originalMaterial.roughnessMap;
+        baseUniforms.roughnessMap = { value: originalMaterial.roughnessMap };
         shaderDefines.USE_ROUGHNESS_MAP = '';
       }
 
       // 继承 金属度贴图
-      baseUniforms.metalness.value = originalMaterial.metalness;
+      baseUniforms.metalness = { value: originalMaterial.metalness };
       if (originalMaterial.metalnessMap) {
-        baseUniforms.metalnessMap.value = originalMaterial.metalnessMap;
+        baseUniforms.metalnessMap = { value: originalMaterial.metalnessMap };
         shaderDefines.USE_METALNESS_MAP = '';
       }
 
       // 继承 自发光属性
-      baseUniforms.emissive.value = originalMaterial.emissive;
+      baseUniforms.emissive = { value: originalMaterial.emissive };
       if (originalMaterial.emissiveMap) {
-        baseUniforms.emissiveMap.value = originalMaterial.emissiveMap;
+        baseUniforms.emissiveMap = { value: originalMaterial.emissiveMap };
         shaderDefines.USE_EMISSIVE_MAP = '';
       }
 
       // 继承 AO贴图
       if (originalMaterial.aoMap) {
-        baseUniforms.aoMap.value = originalMaterial.aoMap;
+        baseUniforms.aoMap = { value: originalMaterial.aoMap };
         shaderDefines.USE_AO_MAP = '';
       }
 
       // 继承 光照贴图
       baseUniforms.lightMapIntensity = { value: originalMaterial.lightMapIntensity };
       if (originalMaterial.lightMap) {
-        baseUniforms.lightMap.value = originalMaterial.lightMap;
+        baseUniforms.lightMap = { value: originalMaterial.lightMap };
         shaderDefines.USE_LIGHT_MAP = '';
       }
 
-      // 继承 法线贴图 (设置各向异性=4)
+      // 继承 法线贴图 (设置各向异性=4 各向异性过滤提高车道/地面远处清晰度)
       if (originalMaterial.normalMap) {
         originalMaterial.normalMap.anisotropy = 4;
-        baseUniforms.normalMap.value = originalMaterial.normalMap;
+        baseUniforms.normalMap = { value: originalMaterial.normalMap };
         shaderDefines.USE_NORMAL_MAP = '';
       }
 
@@ -198,8 +195,8 @@ export class ReflectManager {
         uniforms: baseUniforms,
         vertexShader: reflectVertexShader,
         fragmentShader: reflectFragmentShader,
-        lights: true,
-        fog: true,
+        // lights: true,
+        // fog: true,
       });
 
       // 材质命名

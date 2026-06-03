@@ -30,6 +30,7 @@ class Environment {
   private _needsUpdate: boolean = true;
 
   public pbrEnvMap: THREE.CubeTexture | null = null;
+  private _cubeRenderTarget: THREE.WebGLRenderTarget | null = null;
 
   constructor(renderer: THREE.WebGLRenderer, envMap0: THREE.Texture, envMap1: THREE.Texture) {
     this._renderer = renderer;
@@ -67,6 +68,8 @@ class Environment {
             gl_FragColor = vec4(mix(col0, col1, weight) * intensity, 1.);
         }
       `,
+      depthTest: false,
+      depthWrite: false,
     });
 
     this._fullScreenQuad = new FullScreenQuad(this._mixMaterial);
@@ -82,6 +85,10 @@ class Environment {
       colorSpace: THREE.SRGBColorSpace,
       depthBuffer: false,
     });
+
+    this.forceUpdate();
+    this.pbrEnvMap = this._cubeRenderTarget!.texture as THREE.CubeTexture;
+
     // this._renderTarget.texture.mapping = THREE.CubeUVReflectionMapping;
     this._renderTarget.texture.mapping = THREE.EquirectangularReflectionMapping;
   }
@@ -122,27 +129,44 @@ class Environment {
       // 保存当前渲染目标
       const currentRenderTarget = this._renderer.getRenderTarget();
       const currentClearAlpha = this._renderer.getClearAlpha();
+      const currentAutoClear = this._renderer.autoClear;
 
-      // 渲染混合后的环境贴图
-      this._renderer.setRenderTarget(this._renderTarget);
-      this._renderer.setClearAlpha(0);
-      this._fullScreenQuad.render(this._renderer);
+      try {
+        // 渲染混合后的环境贴图
+        this._renderer.setRenderTarget(this._renderTarget);
+        this._renderer.setClearAlpha(0);
+        this._fullScreenQuad.render(this._renderer);
 
-      this._renderTarget.texture.needsUpdate = true;
+        if (this._cubeRenderTarget) {
+          this._pmremGenerator.fromEquirectangular(
+            this._renderTarget.texture,
+            this._cubeRenderTarget
+          );
+        } else {
+          this._cubeRenderTarget = this._pmremGenerator.fromEquirectangular(
+            this._renderTarget.texture
+          );
+          this.pbrEnvMap = this._cubeRenderTarget.texture as THREE.CubeTexture;
+        }
 
-      if (this._pmremRenderTarget) {
-        this._pmremRenderTarget.dispose();
+        this._cubeRenderTarget.texture.needsUpdate = true;
+        return true;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        // 恢复渲染状态
+        this._renderer.setRenderTarget(currentRenderTarget);
+        this._renderer.setClearAlpha(currentClearAlpha);
+        this._renderer.autoClear = currentAutoClear;
       }
-
-      this._pmremRenderTarget = this._pmremGenerator.fromEquirectangular(
-        this._renderTarget.texture
-      );
-      this.pbrEnvMap = this._pmremRenderTarget.texture as THREE.CubeTexture;
-
-      // 恢复渲染状态
-      this._renderer.setRenderTarget(currentRenderTarget);
-      this._renderer.setClearAlpha(currentClearAlpha);
-
+      // this._renderTarget.texture.needsUpdate = true;
+      // if (this._pmremRenderTarget) {
+      //   this._pmremRenderTarget.dispose();
+      // }
+      // this._pmremRenderTarget = this._pmremGenerator.fromEquirectangular(
+      //   this._renderTarget.texture
+      // );
+      // this.pbrEnvMap = this._pmremRenderTarget.texture as THREE.CubeTexture;
       return true;
     }
     return false;
@@ -165,6 +189,9 @@ class Environment {
 
     if (this._pmremRenderTarget) {
       this._pmremRenderTarget.dispose();
+    }
+    if (this._cubeRenderTarget) {
+      this._cubeRenderTarget.dispose();
     }
   }
 }
@@ -191,7 +218,7 @@ export class EnvironmentManager {
     this._dynamicEnv = new Environment(renderer, envMap0, envMap1);
 
     // 初始状态：强度为0，完全不显示
-    this._dynamicEnv.intensity = 1;
+    this._dynamicEnv.intensity = 0;
     /** 混合权重：0=完全显示envMap0，1=完全显示envMap1 */
     this._dynamicEnv.weight = 0;
 

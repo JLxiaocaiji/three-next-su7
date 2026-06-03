@@ -7,7 +7,6 @@ import { SpringCamera } from '@/classes/SpringCamera';
 import { eventBus } from '@/utils/eventBus';
 
 const DURATION = 0.3; // 单次动画时长
-const LOCK_DURATION = DURATION * 2; // 互斥锁总时长（动画+延迟）
 
 /**
  * 外部全局状态管理器
@@ -60,7 +59,7 @@ export class CameraManager {
   private lerpStrength = 1;
   private moveSpeed = [1, 1];
   private _currentLengthOffset = 0;
-  private _springRotationZClampRange: [number, number] = [-Math.PI / 6, Math.PI / 6]; // [0.02, 0.3]
+  private _springRotationZClampRange: [number, number] = [-Infinity, Infinity]; // [0.02, 0.3]
   private _springRotationYClampRange: [number, number] = [-Infinity, Infinity]; // [-100, 100]
   private _deltaRotation = new THREE.Euler();
   private _targetRotation = new THREE.Euler();
@@ -183,6 +182,7 @@ export class CameraManager {
 
     // 将当前相机状态同步到OrbitControls
     this.orbitControls.target.copy(this._springCamera.lookAt);
+    this._camera.position.copy(this._springCamera.targetCameraPosition);
     this.orbitControls.update();
   }
 
@@ -214,10 +214,11 @@ export class CameraManager {
   reset() {
     this._button = -1;
     this._touchID = -1;
-    this.springLength = this._springCamera.springLength;
+    this._targetSpringLength = this._springCamera.springLength;
     this._targetLookAt.copy(this._springCamera.lookAt);
     this._targetRotation.copy(this._springCamera.rotation);
     this._deltaRotation.set(0, 0, 0);
+
     this._tempEuler1.set(0, 0, 0);
     this.targetFov = this._camera.fov;
     this.isAnimatingPOI = false;
@@ -228,15 +229,18 @@ export class CameraManager {
   }
 
   private _onMouseDown = (e: PointerEvent) => {
+    console.log('mouse down');
     this._button = e.button;
     this._preLoc0.set(e.pageX, e.pageY);
   };
 
   private _onMouseUp = () => {
+    console.log('mouse up');
     this._button = -1;
   };
 
   private _onMouseMove = (e: PointerEvent) => {
+    console.log('mouse move');
     this._tempVec21.set(e.pageX, e.pageY);
     if (this._button === 0) {
       let delta = this._preLoc0
@@ -254,6 +258,7 @@ export class CameraManager {
   }
 
   private _onMouseWheel = (e: WheelEvent) => {
+    console.log('mouse wheel');
     e.preventDefault();
     this._mouseWheelSum += e.deltaY;
     if (this._mouseWheelSum > 200) {
@@ -266,6 +271,7 @@ export class CameraManager {
   };
 
   private _onTouchStart = (e: TouchEvent) => {
+    console.log('touch start');
     if (e.touches.length === 1) {
       this._preLoc0.set(e.touches[0].pageX, e.touches[0].pageY);
       this._touchID = e.touches[0].identifier;
@@ -280,6 +286,7 @@ export class CameraManager {
   };
 
   private _onTouchMove = (e: TouchEvent) => {
+    console.log('touch move');
     if (e.touches.length !== 1 || e.touches[0].identifier !== this._touchID) return;
     const t = e.touches[0];
     this._tempVec22.set(t.pageX, t.pageY);
@@ -303,11 +310,9 @@ export class CameraManager {
     }
 
     if (this.controlMode === 'orbit') {
-      this.orbitControls.update(delta);
+      this.orbitControls.update();
       return;
-    }
-
-    if (this._springCamera.enabled) {
+    } else {
       this._springCamera.update(delta);
     }
 
@@ -327,9 +332,7 @@ export class CameraManager {
     this._springCamera.springLength = THREE.MathUtils.lerp(
       this._springCamera.springLength,
       finalLen,
-      // 0.016 * this._lerpLengthStrength
       delta * this._lerpLengthStrength
-      // delta * this._lerpLengthStrength * 60
     );
 
     // TO(this._deltaRotation, Ev, r * 10),
@@ -378,8 +381,10 @@ export class CameraManager {
   ) {
     return new Promise((resolve, reject) => {
       gsap.killTweensOf(this);
-      gsap.killTweensOf(this._springCamera);
-      gsap.killTweensOf(this._springCamera.lookAt);
+      if (this._springCamera) {
+        gsap.killTweensOf(this._springCamera);
+        gsap.killTweensOf(this._springCamera.lookAt);
+      }
 
       this.isAnimatingPOI = true;
 
@@ -390,8 +395,9 @@ export class CameraManager {
       this._enableControlCamera = false;
 
       if (this._springCamera != null) {
+        const targetRotYZX = new THREE.Euler().copy(rotation).reorder('YZX');
         this._springCamera
-          .gotoPOI(targetLookAt, springLength, rotation, duration, easing, delay)
+          .gotoPOI(targetLookAt, springLength, targetRotYZX, duration, easing, delay)
           .then(() => {
             this.reset();
             this._enableControlCamera = prevEnableControl;
@@ -415,39 +421,64 @@ export class CameraManager {
     targetRotation: THREE.Euler
   ): void {
     gsap.killTweensOf(this);
-    gsap.killTweensOf(this._springCamera);
-    gsap.killTweensOf(this._springCamera.lookAt);
+    if (this._springCamera) {
+      gsap.killTweensOf(this._springCamera);
+      gsap.killTweensOf(this._springCamera.lookAt);
+    }
 
-    // this.reset();
     this._button = -1;
     this._touchID = -1;
     this._deltaRotation.set(0, 0, 0);
-    this.isAnimatingPOI = false;
+    this._tempEuler1.set(0, 0, 0);
 
+    this.isAnimatingPOI = true;
     this.switchToSpringMode();
 
-    // 旋转插值强度先设为 0
-    this._lerpQuatStrength = 0;
+    const startLookAt = this._springCamera.lookAt.clone();
+    const startLength = this._springCamera.springLength;
+    const startQuat = new THREE.Quaternion().setFromEuler(this._springCamera.rotation);
 
-    gsap.killTweensOf(this);
-    gsap.to(this, {
-      _lerpQuatStrength: 5,
-      duration: 1,
-      ease: 'none',
+    // 统一使用 YZX 旋转顺序
+    const targetRotYZX = new THREE.Euler().copy(targetRotation).reorder('YZX');
+    const endQuat = new THREE.Quaternion().setFromEuler(targetRotYZX);
+
+    const transitionObj = { progress: 0 };
+
+    gsap.to(transitionObj, {
+      progress: 1,
+      duration: 1.0,
+      ease: 'power2.out', // 平滑的淡出曲线
+      onUpdate: () => {
+        const t = transitionObj.progress;
+
+        // 平滑插值 LookAt 目标点
+        this._springCamera.lookAt.lerpVectors(startLookAt, targetLookAt, t);
+
+        // 平滑插值弹簧长度
+        this._springCamera.springLength = THREE.MathUtils.lerp(startLength, springLength, t);
+
+        // 四元数球面插值（slerp）旋转，避免万向节死锁或多圈旋转突变
+        this._tempQuat1.copy(startQuat).slerp(endQuat, t);
+        this._springCamera.rotation.setFromQuaternion(this._tempQuat1, 'YZX');
+      },
       onComplete: () => {
+        // 动画结束
+        this._springCamera.lookAt.copy(targetLookAt);
+        this._springCamera.springLength = springLength;
+        this._springCamera.rotation.copy(targetRotYZX);
+
+        this.reset();
+
+        this.isAnimatingPOI = false;
         this.switchToOrbitMode();
       },
     });
-
-    this.springLength = springLength;
-    this._targetLookAt.copy(targetLookAt);
-    this._targetRotation.copy(targetRotation);
   }
 
   public setNewRange(
     // zRange: [number, number] = [0.02, 0.3],
     // yRange: [number, number] = [-100, 100]
-    zRange: [number, number] = [-Math.PI / 6, Math.PI / 6],
+    zRange: [number, number] = [-Infinity, Infinity],
     yRange: [number, number] = [-Infinity, Infinity]
   ): void {
     this._springRotationZClampRange = zRange;

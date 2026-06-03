@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   SMAAEffect,
   SMAAPreset,
@@ -63,7 +62,11 @@ export class SceneManager {
 
   public cameraManager: CameraManager | null = null;
 
+  // 汽车运动
   public carMotionManager: CarMotionManager | null = null;
+  // 汽车运动背景
+  public u_speedUpBackgroundValue: { value: number } = { value: 0 };
+
   // 反射
   public reflectManager: ReflectManager | null = null;
 
@@ -73,7 +76,6 @@ export class SceneManager {
   public springCamera: SpringCamera | null = null;
   public readonly renderer: THREE.WebGLRenderer;
   public sizes: { width: number; height: number; pixelRatio: number; factor?: number };
-  // public readonly controls: OrbitControls;
 
   // 立体相机
   public cubeCamera: THREE.CubeCamera | null = null;
@@ -111,19 +113,14 @@ export class SceneManager {
 
   // timer
   public timer: THREE.Timer;
-  public globalUniforms: Record<string, THREE.IUniform> = {
-    u_time: { value: 0 },
-    u_speedTime: { value: 0 },
-  };
 
   // 动画帧 ID（用于清理）
   private _animationFrameId: number | null = null;
-  // 窗口大小监听函数（用于清理）
-  private _resizeHandler: (() => void) | null = null;
-  // 当前模型缓存
-  private currentModelCache: THREE.Group[] = [];
 
-  private currentColorIndex: 'custom' | string | 0 = '00';
+  // 当前模块
+  currentModule: Module = 0;
+  // 是否按压
+  isClickEffect = false;
 
   // 固定temp
   // private _tempColor = new THREE.Color();
@@ -169,15 +166,10 @@ export class SceneManager {
 
     this.timer = new THREE.Timer();
 
-    // this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    // this.controls.enableDamping = true;
-    // this.controls.dampingFactor = 0.05;
-
     const axesHelper = new THREE.AxesHelper(5);
     this.scene.add(axesHelper);
 
     this.initPostProcessing();
-    // this._initResizeHandler();
     this.initGui();
 
     this.modelManager = ModelManager.getInstance();
@@ -290,14 +282,9 @@ export class SceneManager {
       // };
       // await this.materialManager.initEnvironment('t_env_light');
 
-      // console.log('t_env_night mapping:', t_env_night.mapping); // 应该输出300（EquirectangularReflectionMapping）
-      // console.log('t_env_night is CubeTexture:', t_env_night instanceof THREE.CubeTexture);
-
       await this.prepareScene();
       await this.createScene();
       this.compileScene();
-
-      console.log('sceneConfig', sceneConfig);
     }
   }
 
@@ -376,16 +363,11 @@ export class SceneManager {
       'sm_curvature' as CacheKey
     ) as ModelGroup;
     const sm_curvatureMeshData = sm_curvatureModelCache?.userData?.meshData as ModelMeshData;
-    // sm_curvature -> 曲率
-    const sm_curvatureMesh = sm_curvatureMeshData.meshes.find((item) => item.name === '曲率');
 
     // m.name == "曲率" && (m.material = NO,
     // _.materials.m_curvature = m.material,
     // m.layers.enable(Ae.LAYER_CAPTURE))
-    sm_curvatureMesh &&
-      ((sm_curvatureMeshData.materials as any).m_curvature =
-        this.materialManager.initCurvatureMaterial(sm_curvatureMesh));
-    sm_curvatureMesh!.layers.enable(sceneConfig.LAYER_CAPTURE);
+    this.materialManager.initCurvatureMaterial(sm_curvatureMeshData);
 
     Object.values(sm_curvatureMeshData.materials).forEach((item) => {
       item.transparent = true;
@@ -427,8 +409,6 @@ export class SceneManager {
     const sm_startroomModelCache = this.modelManager.getCache(
       'sm_startroom' as CacheKey
     ) as ModelGroup;
-
-    console.log('sm_startroomModelCache', sm_startroomModelCache);
 
     const reflectFloor = sm_startroomModelCache!.getObjectByName('ReflecFloor') as THREE.Mesh;
 
@@ -476,8 +456,6 @@ export class SceneManager {
     this.boxProjectionProbe.probeBoxMin.set(-3, -0.1, -1.5);
     this.boxProjectionProbe.probeBoxMax.set(3.6, 3, 1.5);
 
-    console.log('this.boxProjectionProbe', this.boxProjectionProbe);
-
     // m = r.addNode(new ZO(A))
     this.materialManager.initCarLightMaterial(carModelCache);
 
@@ -504,8 +482,7 @@ export class SceneManager {
      * 点击绑定事件
      */
     // xxxx  JO
-    // this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
-    // this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+    this.bindEvents();
 
     // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
     // const R = r.addNode(new $O(A, U));
@@ -526,7 +503,8 @@ export class SceneManager {
     // r.addNode(iB) sm_linecar
     this.modelManager.initLinecarModel();
     // r.addNode(lB) sm_carradar -> m_radarPoints
-    this.modelManager.initCarRadarPointsModel();
+    let pointMaterial = this.materialManager.getRadarPointMaterial();
+    this.modelManager.initCarRadarPointsModel(pointMaterial);
     // r.addNode(rB) sm_carradar
     this.modelManager.initCarradarModel();
     // r.addNode(sB) sm_simpleCar
@@ -598,6 +576,8 @@ export class SceneManager {
   // 模块切换处理 eventBus.on('UPDATESHOWINGSTATE')
   handleModuleChange(module?: Module): void {
     console.log('handleModuleChange', module);
+    this.currentModule = module || 0;
+
     // 车移动模块获取 moduel 用于 update
     this.carMotionManager?.getCurrentModule(module);
 
@@ -658,10 +638,10 @@ export class SceneManager {
         );
         // s3_b = $ = nB
         this.modelManager.showModel(this.modelManager.windSpeedModel, (val: number) =>
-          this.modelManager.setSizeVisibility(val)
+          this.modelManager.setWindSpeedVisibility(val)
         );
-        this.cameraManager!.targetFov = 33.4;
         this.transitionModuel(0, 0, 10, 0, 0.5);
+        this.cameraManager!.targetFov = 33.4;
 
         gsap.killTweensOf(this.boxProjectionProbe);
         gsap
@@ -672,10 +652,10 @@ export class SceneManager {
             duration: 1,
             ease: 'power3.inOut',
             onUpdate: () => {
-              // this.boxProjectionProbe?.update();
+              this.boxProjectionProbe!.needUpdate = true;
             },
           })
-          .start();
+          .play();
         break;
       case 4:
         this.cameraManager!.setNewTarget(
@@ -688,7 +668,7 @@ export class SceneManager {
         this.cameraManager!.targetFov = 33.4;
         // s4_b = N = lB
         this.modelManager.showModel(this.modelManager.carRadarPointModel, (val: number) =>
-          this.modelManager.setSizeVisibility(val)
+          this.modelManager.setRadarPointsVisibility(val)
         );
         break;
 
@@ -823,12 +803,6 @@ export class SceneManager {
         delay: undefined,
       },
       {
-        model: this.modelManager.carRadarPointModel,
-        func: (val: number) => this.modelManager.setRadarPointsVisibility(val),
-        duration: undefined,
-        delay: undefined,
-      },
-      {
         model: this.modelManager.simpleCarData,
         func: (val: number) => this.modelManager.setSimpleCarVisibility(val),
         duration: undefined,
@@ -838,16 +812,6 @@ export class SceneManager {
     arr.forEach((item) => {
       this.modelManager.hideModel(item.model, item.func, item.duration, item.delay);
     });
-
-    // console.log('this.modelManager.weiyiModel', this.modelManager.weiyiModel);
-    // console.log('this.modelManager.lightbarModel', this.modelManager.lightbarModel);
-    // console.log('this.modelManager.sizeModel', this.modelManager.sizeModel);
-    // console.log('this.modelManager.curvatureModel', this.modelManager.curvatureModel);
-    // console.log('this.modelManager.windSpeedModel', this.modelManager.windSpeedModel);
-    // console.log('this.modelManager.linecarModel', this.modelManager.linecarModel);
-    // console.log('this.modelManager.carRadarPointModel', this.modelManager.carRadarPointModel);
-    // console.log('this.modelManager.carRadarPointModel', this.modelManager.carRadarPointModel);
-    // console.log('this.modelManager.simpleCarData', this.modelManager.simpleCarData);
   }
 
   // 开场动画
@@ -891,8 +855,6 @@ export class SceneManager {
           } else {
             eventBus.emit('ChangeModule', { module: 1 });
           }
-
-          console.log('this.cameraManager', this.cameraManager);
 
           // this.cameraManager!.enableControlCamera = true;
         });
@@ -1091,174 +1053,6 @@ export class SceneManager {
     // } = sceneConfig.colors.get(index);
   }
 
-  // CLICKEFFECT 点击效果
-  public handleClickEffect(isClickEffect: boolean): void {
-    let curIsEnable = false;
-    let curModule = 0;
-
-    let currentModule = useStore.getState().currentModule;
-
-    if (isClickEffect !== curIsEnable || currentModule !== curModule) {
-      curIsEnable = isClickEffect;
-      curModule = currentModule;
-    } else {
-      return;
-    }
-
-    // 隐藏所有配件
-    this.hideAllAccessories();
-
-    switch (currentModule) {
-      case 1:
-        if (isClickEffect) {
-          this.carMotionManager!.targetVelocity = 8;
-          this.carMotionManager!.lerpStrength = 0.5;
-          this.cameraManager!.targetFov = 60;
-          this.cameraManager!._springlengthOffset = -3;
-          this.cameraManager!._lerpStrength = 0.5;
-
-          // m.s1_c.show()
-          this.modelManager.showModel(this.modelManager.weiyiModel, (val: number) =>
-            this.modelManager.setSizeVisibility(val)
-          );
-          // m.s1_cpcl.show(.5, .2),
-          this.modelManager.showModel(
-            this.modelManager.lightbarModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            0.5,
-            0.2
-          );
-          this.transitionModuel(0, 0.1, 1, 0, 0);
-
-          gsap.killTweensOf(sceneConfig.u_carMetalness);
-          gsap.to(sceneConfig.u_carMetalness, {
-            value: Math.max(0, sceneConfig.u_carMetalness.value - 0.3),
-            duration: 0.8,
-            ease: 'cubic.in',
-          });
-        } else {
-          this.carMotionManager!.targetVelocity = 0;
-          this.carMotionManager!.lerpStrength = 1.5;
-          this.cameraManager!.targetFov = 60;
-          this.cameraManager!._springlengthOffset = 0;
-          this.cameraManager!._lerpStrength = 0.5;
-
-          this.transitionModuel();
-
-          gsap.killTweensOf(sceneConfig.u_carMetalness);
-          gsap.to(sceneConfig.u_carMetalness, {
-            // value: sceneConfig.colors.get(Ie.currentColorIndex).metal ?? 0,
-            value: 0,
-            duration: 1,
-            ease: 'cubic.in',
-          });
-        }
-        break;
-      case 2:
-        if (isClickEffect) {
-          // m.s3_c.show(1, 0.2)
-          this.modelManager.showModel(
-            this.modelManager.curvatureModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            1,
-            0.2
-          );
-          this.cameraManager!.targetFov = 45;
-          this.cameraManager!._lerpStrength = 0.5;
-        } else {
-          this.modelManager.showModel(
-            this.modelManager.sizeModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            1,
-            0.2
-          );
-          this.cameraManager!.targetFov = 33.4;
-          this.cameraManager!._lerpStrength = 0.5;
-        }
-        break;
-      case 3:
-        if (isClickEffect) {
-          // m.s3_c.show(1, 0.2)
-          this.modelManager.showModel(
-            this.modelManager.linecarModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            1,
-            0.2
-          );
-          this.cameraManager!.targetFov = 60;
-          this.cameraManager!._springlengthOffset = -3;
-          this.cameraManager!._lerpStrength = 1.5;
-        } else {
-          this.modelManager.showModel(
-            this.modelManager.windSpeedModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            1,
-            0.2
-          );
-          this.cameraManager!.targetFov = 33.4;
-          this.cameraManager!._springlengthOffset = 0;
-          this.cameraManager!._lerpStrength = 1.5;
-        }
-        break;
-      case 4:
-        if (isClickEffect) {
-          this.carMotionManager!.targetVelocity = 16;
-          this.carMotionManager!.lerpStrength = 0.5;
-
-          this.modelManager.showModel(
-            this.modelManager.carRadarModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            1,
-            0.2
-          );
-          this.modelManager.showModel(
-            this.modelManager.simpleCarData,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            0.5,
-            0.2
-          );
-
-          this.cameraManager!.targetFov = 25;
-          this.cameraManager!._springlengthOffset = 20;
-          this.cameraManager!._lerpStrength = 1.5;
-          this.cameraManager!._moveSpeed = [0.1, 0.1];
-
-          this.transitionModuel(0.2, 0.3, 3, 0, 1.5);
-        } else {
-          this.carMotionManager!.targetVelocity = 0;
-          this.carMotionManager!.lerpStrength = 1.5;
-
-          this.cameraManager!.targetFov = 33.4;
-          this.cameraManager!._springlengthOffset = 0;
-          this.cameraManager!._lerpStrength = 1.5;
-          this.cameraManager!._moveSpeed = [1, 1];
-          this.modelManager.showModel(
-            this.modelManager.carRadarPointModel,
-            (val: number) => this.modelManager.setSizeVisibility(val),
-            0.5,
-            0.2
-          );
-
-          this.transitionModuel(0.2, 0.3, 3, 0, 1.5);
-        }
-
-        break;
-      case 5:
-        if (isClickEffect) {
-        } else {
-        }
-        break;
-    }
-  }
-
-  // private onPointerDown = () => {
-  //   eventBus.emit('SetClickEffect', { isClickEffect: true });
-  // };
-
-  // private onPointerUp = () => {
-  //   eventBus.emit('SetClickEffect', { isClickEffect: false });
-  // };
-
   // 后期处理
   private initPostProcessing(): void {
     // 后期处理
@@ -1272,23 +1066,11 @@ export class SceneManager {
     return this.envMaps[envName] || null;
   }
 
-  // 更新实时环境贴图与模糊
-  private _updateReflection(): void {
-    // 确保所有部件都已初始化
-    if (!this.cubeCamera || !this.cubeRenderTarget || !this.blurPass) return;
-    this.cubeCamera.position.set(0, 0, 0);
-    this.cubeCamera.update(this.renderer, this.scene);
-
-    this.blurPass.update();
-  }
-
   public startRender(): void {
     if (this._animationFrameId) return;
 
     const render = () => {
       this._animationFrameId = requestAnimationFrame(render);
-
-      // this._updateReflection();
 
       //   update(r) {
       //     if (Ae.u_speedTime.value += r * Ae.u_speedUpBackgroundValue.value * .2,
@@ -1302,17 +1084,33 @@ export class SceneManager {
       // }
       this.timer.update();
       const deltaTime = this.timer.getDelta();
-
-      this.globalUniforms.u_speedTime.value +=
-        deltaTime * sceneConfig.u_speedUpBackgroundValue.value * 0.2;
-      this.globalUniforms.u_time.value = this.timer.getElapsed();
+      const elapsedTime = this.timer.getElapsed();
 
       if (sceneConfig.sm_car) {
         this.materialManager.updateSmCarCarBody();
       }
 
+      // 模块1, 汽车移动
+      this.currentModule == 1 &&
+        // this.isClickEffect &&
+        this.carMotionManager &&
+        this.carMotionManager.update(deltaTime, this.u_speedUpBackgroundValue);
+
+      // 模块1， sm_car_lightbar
+      this.currentModule == 1 &&
+        // this.isClickEffect &&
+        this.carMotionManager &&
+        this.modelManager.updateLightbarIntensity();
+
+      // 模块4
+      this.currentModule == 4 && this.modelManager.updateSimpleCar(deltaTime);
+
+      // 相机
       this.cameraManager && this.cameraManager.update(deltaTime);
-      // this.controls.update();
+
+      // 更新材质
+      this.materialManager &&
+        this.materialManager.update(deltaTime, elapsedTime, this.u_speedUpBackgroundValue);
 
       // this.materialManager.updateEnvMap(new THREE.Vector3(0, 0, 0));
 
@@ -1335,11 +1133,6 @@ export class SceneManager {
       cancelAnimationFrame(this._animationFrameId);
       this._animationFrameId = null;
     }
-  }
-
-  private _initResizeHandler(): void {
-    this._resizeHandler = () => this.resize();
-    window.addEventListener('resize', this._resizeHandler);
   }
 
   public resize(width = window.innerWidth, height = window.innerHeight, isSwap = false): void {
@@ -1378,19 +1171,192 @@ export class SceneManager {
     this.screenshotManager!.screenshot();
   }
 
+  private onPointerDown = () => {
+    console.log('onPointerDown');
+
+    this.isClickEffect = true;
+    this.handleClickEffect(true);
+  };
+
+  private onPointerUp = () => {
+    console.log('onPointerUp');
+
+    this.handleClickEffect(false);
+    this.isClickEffect = false;
+  };
+
+  // 点击效果
+  public handleClickEffect(isClickEffect: boolean): void {
+    console.log('handleClickEffect', isClickEffect, this.currentModule);
+
+    // 隐藏所有配件
+    this.hideAllAccessories();
+
+    switch (this.currentModule) {
+      case 1:
+        if (isClickEffect) {
+          this.carMotionManager!.targetVelocity = 8;
+          this.carMotionManager!.lerpStrength = 0.5;
+          this.cameraManager!.targetFov = 60;
+          this.cameraManager!._springlengthOffset = -3;
+          this.cameraManager!._lerpStrength = 0.5;
+
+          // m.s1_c.show()
+          this.modelManager.showModel(this.modelManager.weiyiModel, (val: number) =>
+            this.modelManager.setWeiYiPosition(val)
+          );
+          // m.s1_cpcl.show(.5, .2),
+          this.modelManager.showModel(
+            this.modelManager.lightbarModel,
+            (val: number) => this.modelManager.setLightbarVisibility(val),
+            0.5,
+            0.2
+          );
+          this.transitionModuel(0, 0.1, 1, 0, 0);
+
+          gsap.killTweensOf(sceneConfig.u_carMetalness);
+          gsap.to(sceneConfig.u_carMetalness, {
+            value: Math.max(0, sceneConfig.u_carMetalness.value - 0.3),
+            duration: 0.8,
+            ease: 'cubic.in',
+          });
+        } else {
+          this.carMotionManager!.targetVelocity = 0;
+          this.carMotionManager!.lerpStrength = 1.5;
+          this.cameraManager!.targetFov = 33.4;
+          this.cameraManager!._springlengthOffset = 0;
+          this.cameraManager!._lerpStrength = 1.5;
+
+          this.transitionModuel();
+
+          gsap.killTweensOf(sceneConfig.u_carMetalness);
+          gsap.to(sceneConfig.u_carMetalness, {
+            value: Math.max(0, sceneConfig.u_carMetalness.value - 0.3),
+            duration: 1,
+            ease: 'cubic.in',
+          });
+        }
+        break;
+      case 2:
+        if (isClickEffect) {
+          // m.s2_c.show(1, 0.2)
+          this.modelManager.showModel(
+            this.modelManager.curvatureModel,
+            (val: number) => this.modelManager.setCurvatureVisibility(val),
+            1,
+            0.2
+          );
+          this.cameraManager!.targetFov = 45;
+          this.cameraManager!._lerpStrength = 0.5;
+        } else {
+          this.modelManager.showModel(
+            this.modelManager.sizeModel,
+            (val: number) => this.modelManager.setSizeVisibility(val),
+            1,
+            0.2
+          );
+          this.cameraManager!.targetFov = 33.4;
+          this.cameraManager!._lerpStrength = 0.5;
+        }
+        break;
+      case 3:
+        if (isClickEffect) {
+          // m.s3_c.show(1, 0.2)
+          this.modelManager.showModel(
+            this.modelManager.linecarModel,
+            (val: number) => this.modelManager.setLineCarVisibility(val),
+            1,
+            0.2
+          );
+          this.cameraManager!.targetFov = 60;
+          this.cameraManager!._springlengthOffset = -3;
+          this.cameraManager!._lerpStrength = 1.5;
+        } else {
+          this.modelManager.showModel(
+            this.modelManager.windSpeedModel,
+            (val: number) => this.modelManager.setWindSpeedVisibility(val),
+            1,
+            0.2
+          );
+          this.cameraManager!.targetFov = 33.4;
+          this.cameraManager!._springlengthOffset = 0;
+          this.cameraManager!._lerpStrength = 1.5;
+        }
+        break;
+      case 4:
+        if (isClickEffect) {
+          this.carMotionManager!.targetVelocity = 16;
+          this.carMotionManager!.lerpStrength = 0.5;
+
+          // m.s4_c.show()
+          this.modelManager.showModel(this.modelManager.carRadarModel, (val: number) =>
+            this.modelManager.setCarRadarVisibility(val)
+          );
+          // m.s4_cSC.show()
+          this.modelManager.showModel(this.modelManager.simpleCarData, (val: number) =>
+            this.modelManager.setSimpleCarVisibility(val)
+          );
+          // m.s1_c.show()
+          this.modelManager.showModel(this.modelManager.weiyiModel, (val: number) =>
+            this.modelManager.setWeiYiPosition(val)
+          );
+          // m.s1_cpcl.show(0.5, 0.2)
+          this.modelManager.showModel(
+            this.modelManager.weiyiModel,
+            (val: number) => this.modelManager.setLightbarVisibility(val),
+            0.5,
+            0.2
+          );
+
+          this.cameraManager!.targetFov = 25;
+          this.cameraManager!._springlengthOffset = 20;
+          this.cameraManager!._lerpStrength = 1.5;
+          this.cameraManager!._moveSpeed = [0.1, 0.1];
+
+          this.transitionModuel(0.2, 0.3, 3, 0, 1.5);
+        } else {
+          this.carMotionManager!.targetVelocity = 0;
+          this.carMotionManager!.lerpStrength = 1.5;
+
+          this.cameraManager!.targetFov = 33.4;
+          this.cameraManager!._springlengthOffset = 0;
+          this.cameraManager!._lerpStrength = 1.5;
+          this.cameraManager!._moveSpeed = [1, 1];
+          this.modelManager.showModel(this.modelManager.carRadarPointModel, (val: number) =>
+            this.modelManager.setRadarPointsVisibility(val)
+          );
+
+          this.transitionModuel(0.2, 0.3, 3, 0, 1.5);
+        }
+
+        break;
+      default:
+        break;
+    }
+  }
+
+  // 点击绑定
+  bindEvents(): void {
+    if (!this.renderer?.domElement) return;
+
+    this.unbindEvents();
+    this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+  }
+
+  // 点击解绑
+  unbindEvents(): void {
+    if (!this.renderer?.domElement) return;
+
+    this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
+  }
+
   public dispose(): void {
     this.stopRender();
     if (this.cubeRenderTarget) this.cubeRenderTarget.dispose();
     if (this.effect.smaaEffect) this.effect.smaaEffect.dispose();
     if (this.blurPass) this.blurPass.dispose();
-
-    if (this._resizeHandler) {
-      window.removeEventListener('resize', this._resizeHandler);
-      this._resizeHandler = null;
-    }
-
-    this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
-    this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
 
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
@@ -1399,6 +1365,8 @@ export class SceneManager {
 
     // 截屏
     this.screenshotManager!.dispose();
+
+    this.unbindEvents();
 
     if (this.gui) {
       this.gui.destroy();

@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { sceneConfig } from './constantsConfig';
 import { CameraManager } from './cameraManager';
-
-import { eventBus } from '@/utils/eventBus';
+import { customVertexShader } from '@/shaders/customVertexShader';
 
 /**
  * 车轮 + 速度控制
@@ -19,8 +18,6 @@ export class CarMotionManager {
   private currentModule: Module = 0;
 
   public u_floorUVOffset: { value: THREE.Vector2 } | null = null;
-  public u_speedUpBackgroundValue: { value: number } | null = null;
-
   // 传入：车轮根节点、弹簧相机实例
   constructor(carModelCache: THREE.Group, springCameraOB: CameraManager) {
     this._cameraManager = springCameraOB;
@@ -31,9 +28,6 @@ export class CarMotionManager {
       null;
 
     this.u_floorUVOffset = { value: sceneConfig.u_floorUVOffset.value };
-    this.u_speedUpBackgroundValue = { value: sceneConfig.u_speedUpBackgroundValue.value };
-
-    this.getCurrentModule();
   }
 
   // 设置目标速度
@@ -47,22 +41,15 @@ export class CarMotionManager {
   }
 
   async getCurrentModule(module?: Module) {
+    console.log('getCurrentModule', module);
     if (module) {
       this.currentModule = module;
       return;
     }
-    // const temp = await new Promise<Module | null>((resolve) => {
-    //   // 1. 监听返回事件
-    //   eventBus.on('GetCurrentModule', ({ module: module }: { module: Module }) => {
-    //     resolve(module);
-    //   });
-    // });
-
-    // this.currentModule = temp || 0;
   }
 
   // 每帧更新（对应原 update）
-  update(deltaTime: number) {
+  update(deltaTime: number, u_speedUpBackgroundValue: { value: number }) {
     // 平滑插值速度
     this._currentVelocity = THREE.MathUtils.lerp(
       this._currentVelocity,
@@ -70,7 +57,7 @@ export class CarMotionManager {
       deltaTime * this._lerpStrength
     );
 
-    if (!this._wheels || !this.u_floorUVOffset || !this.u_speedUpBackgroundValue) return;
+    if (!this._wheels || !this.u_floorUVOffset) return;
 
     // 旋转所有车轮
     for (const wheel of this._wheels.children) {
@@ -81,10 +68,9 @@ export class CarMotionManager {
     this.u_floorUVOffset.value.x += this._currentVelocity * deltaTime;
 
     // 背景加速效果值
-    let speedUpBackgroundValue = this.u_speedUpBackgroundValue.value;
+    let speedUpBackgroundValue = u_speedUpBackgroundValue.value;
 
-    //
-    if (this.currentModule === 0) {
+    if (this.currentModule === 1) {
       speedUpBackgroundValue = THREE.MathUtils.lerp(
         speedUpBackgroundValue,
         this._currentVelocity,
@@ -94,7 +80,7 @@ export class CarMotionManager {
       speedUpBackgroundValue = THREE.MathUtils.lerp(speedUpBackgroundValue, 0, deltaTime * 5);
     }
 
-    this.u_speedUpBackgroundValue.value = speedUpBackgroundValue;
+    u_speedUpBackgroundValue.value = speedUpBackgroundValue;
 
     this.tempVec3.set(1, 1, 1).multiplyScalar(speedUpBackgroundValue / 5);
     this._cameraManager._springCamera.positionScale.copy(this.tempVec3);

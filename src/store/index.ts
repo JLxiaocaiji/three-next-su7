@@ -35,6 +35,7 @@ export const useStore = create<State>()(
           user: { name: '' },
           // 状态
           currentModule: 0,
+          isClickEffect: false,
 
           setUser: (name: string) =>
             set((state) => {
@@ -64,12 +65,12 @@ export const useStore = create<State>()(
 );
 
 // 获取当前模块
-const getCurrentModule = () => {
-  const currentModule = useStore.getState().currentModule;
-  eventBus.emit('GetCurrentModule', { module: currentModule });
-};
-eventBus.off('GetCurrentModule', getCurrentModule);
-eventBus.on('GetCurrentModule', getCurrentModule);
+// const getCurrentModule = () => {
+//   const currentModule = useStore.getState().currentModule;
+//   eventBus.emit('GetCurrentModule', { module: currentModule });
+// };
+// eventBus.off('GetCurrentModule', getCurrentModule);
+// eventBus.on('GetCurrentModule', getCurrentModule);
 
 // 更改模块
 const changeModule = ({ module: module }: { module: Module }) => {
@@ -94,7 +95,7 @@ eventBus.on('SetClickEffect', setClickEffect);
 useStore.setState({
   cleanup: () => {
     eventBus.off('ChangeModule', changeModule);
-    eventBus.off('GetCurrentModule', getCurrentModule);
+    // eventBus.off('GetCurrentModule', getCurrentModule);
   },
 });
 

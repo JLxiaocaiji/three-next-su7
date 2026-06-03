@@ -22,7 +22,7 @@ export default function ScreenShot() {
 
     const link = document.createElement('a');
     link.href = imageSrc;
-    link.download = `screenshot-${Date.now()}.png`;
+    link.download = `screenshot-${new Date().getTime()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

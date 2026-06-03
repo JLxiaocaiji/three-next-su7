@@ -235,3 +235,12 @@ export const isTouchDevice = (): boolean => {
 export const randFloat = (u: number, e: number) => {
   return u + Math.random() * (e - u);
 };
+
+export const isEmptyObject = (obj: unknown) => {
+  return (
+    obj !== null &&
+    typeof obj === 'object' &&
+    Object.prototype.toString.call(obj) === '[object Object]' &&
+    Object.keys(obj).length === 0
+  );
+};
