@@ -3,7 +3,6 @@ import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
 import { eventBus } from '@/utils/eventBus';
-import { SceneManager } from '@/lib/manager/sceneManager';
 
 type Module = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -38,16 +37,22 @@ export const useStore = create<State>()(
           isClickEffect: false,
 
           setUser: (name: string) =>
-            set((state) => {
-              state.user.name = name;
+            set((draft) => {
+              draft.user.name = name;
             }),
 
           // 切换模块
           setCurrentModule: (module: Module) =>
-            set((state) => {
-              state.currentModule = module;
+            set((draft) => {
+              draft.currentModule = module;
+              eventBus.emit('ChangeModule', { module });
             }),
 
+          setClickEffect: (isClickEffect: boolean) =>
+            set((draft) => {
+              draft.isClickEffect = isClickEffect;
+              eventBus.emit('SetClickEffect', { isClickEffect });
+            }),
           cleanup: () => {},
         };
       },
@@ -55,8 +60,8 @@ export const useStore = create<State>()(
       {
         name: 'localstorage-user',
         // 持久化字段
-        partialize: (state) => ({
-          user: state.user,
+        partialize: (draft) => ({
+          user: draft.user,
           // currentModule 不持久化
         }),
       }
@@ -74,30 +79,17 @@ export const useStore = create<State>()(
 
 // 更改模块
 const changeModule = ({ module: module }: { module: Module }) => {
-  useStore.getState().setCurrentModule(module);
-
-  const sceneManager = SceneManager.getInstance();
-  sceneManager.handleModuleChange(module);
+  useStore.setState({ currentModule: module });
 };
 eventBus.off('ChangeModule', changeModule);
 eventBus.on('ChangeModule', changeModule);
 
-// 是否点击 / 按压屏幕
-const setClickEffect = ({ isClickEffect: isClickEffect }: { isClickEffect: boolean }) => {
-  useStore.getState().setClickEffect(isClickEffect);
-
-  const sceneManager = SceneManager.getInstance();
-  sceneManager.handleClickEffect(isClickEffect);
-};
-eventBus.off('SetClickEffect', setClickEffect);
-eventBus.on('SetClickEffect', setClickEffect);
-
-useStore.setState({
-  cleanup: () => {
-    eventBus.off('ChangeModule', changeModule);
-    // eventBus.off('GetCurrentModule', getCurrentModule);
-  },
-});
+// useStore.setState({
+//   cleanup: () => {
+//     eventBus.off('ChangeModule', changeModule);
+//     // eventBus.off('GetCurrentModule', getCurrentModule);
+//   },
+// });
 
 export const cleanupAllStores = () => {
   useStore.getState().cleanup();

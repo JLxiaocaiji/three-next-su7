@@ -12,7 +12,12 @@ import ScreenShot from '@/components/ScreenShot';
 
 import { useCurrentModule, useUser } from '@/store';
 import { eventBus } from '@/utils/eventBus';
+
+import { enableMapSet } from 'immer';
+
 export default function Page() {
+  enableMapSet();
+
   const [loadingProgress, setLoadingProgress] = useState(0);
   const currentModule = useCurrentModule();
 

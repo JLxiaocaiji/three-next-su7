@@ -40,11 +40,9 @@ export class CarMotionManager {
     this._lerpStrength = v;
   }
 
-  async getCurrentModule(module?: Module) {
-    console.log('getCurrentModule', module);
+  getCurrentModule(module?: Module) {
     if (module) {
       this.currentModule = module;
-      return;
     }
   }
 

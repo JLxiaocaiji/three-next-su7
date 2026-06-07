@@ -19,8 +19,13 @@ type Events = {
   // 获取当前是否处于点击状态
   GetClickEffect: { isClickEffect: boolean };
 
+  // 请求颜色列表
+  RequestColorList: void;
+  // 返回颜色列表
+  ReturnColorList: Map<string, ColorThemeItem | CustomColor>;
+
   // 颜色切换
-  ChangeColor: { param: 'custom' | string | 0 };
+  ChangeColor?: string;
   // 改变UI颜色参数
   ChangeUIColorParam: { paramType: ColorParamType };
 
@@ -41,6 +46,13 @@ type Events = {
   /**
    * 场景5相关
    */
+  'ChangeColor:ChangeHue': undefined;
+  'ChangeColor:ChangeS': undefined;
+  'ChangeColor:ChangeL': undefined;
+  'ChangeColor:ChangeMetal': undefined;
+  'ChangeColor:ChangeRough': undefined;
+  'ChangeColor:SetColor': { col: THREE.Color };
+
   // UI 发送给 ScreenshotManager 的指令
   'ScreenshotManager:show': { duration?: number };
   'ScreenshotManager:hide': { duration?: number };

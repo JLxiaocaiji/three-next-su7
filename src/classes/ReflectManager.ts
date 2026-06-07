@@ -31,7 +31,6 @@ export class ReflectManager {
     this._renderer = renderer;
     this.reflectMesh = reflectMesh;
 
-    console.log('this.reflectMesh', this.reflectMesh);
     this._clipBias = clipBias;
 
     this.camera = new THREE.PerspectiveCamera(
@@ -83,7 +82,6 @@ export class ReflectManager {
     const lightUniforms = THREE.UniformsUtils.clone(THREE.UniformsLib['lights']);
     const fogUniforms = THREE.UniformsUtils.clone(THREE.UniformsLib['fog']);
 
-    console.log('textureConfig', sceneConfig.ut_floorMap);
     const baseUniforms: THREE.ShaderMaterial['uniforms'] = {
       // 基础PBR材质属性
       color: { value: new THREE.Color() },
@@ -132,8 +130,6 @@ export class ReflectManager {
 
     // 获取网格的原始材质
     const originalMaterial = mesh.material as THREE.MeshPhysicalMaterial;
-
-    console.log('originalMaterial', originalMaterial);
 
     // 若存在原始标准材质，继承其属性到Shader材质
     if (originalMaterial) {

@@ -18,6 +18,26 @@ declare global {
   type ProgressCallback = (p: { loadedBytes: number; currentFile: string }) => void;
 
   type Module = 0 | 1 | 2 | 3 | 4 | 5;
+
+  interface ColorThemeItem {
+    col: THREE.Color;
+    hsl?: { h: number; s: number; l: number };
+    bgUrl: string;
+    rough?: number;
+    metal?: number;
+    carCover?: any;
+    carWindowFilm?: any;
+    carWindowRoughness?: any;
+    floorMap?: any;
+  }
+
+  interface CustomColor {
+    col: THREE.Color;
+    hsl: { h: number; s: number; l: number };
+    bgUrl: string;
+    rough: number;
+    metal: number;
+  }
 }
 
 declare module 'react' {

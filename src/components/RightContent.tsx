@@ -1,7 +1,7 @@
 'use client';
 
 import { useTap } from '@/hook/index';
-import { eventBus } from '@/utils/eventBus';
+import { useStore } from '@/store/index';
 export default function RightContent({ currentModule }: { currentModule: Module }) {
   type Part = { stepLabel: string; currentModule: Module };
 
@@ -13,8 +13,10 @@ export default function RightContent({ currentModule }: { currentModule: Module 
     { stepLabel: '定制', currentModule: 5 },
   ];
 
+  const { setCurrentModule } = useStore();
+
   const tap = useTap((e: Part) => {
-    eventBus.emit('ChangeModule', { module: e.currentModule });
+    setCurrentModule(e.currentModule);
   });
 
   return (

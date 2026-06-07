@@ -27,8 +27,6 @@ import { MipBlurPass } from '@/classes/MipBlurPass';
 import { eventBus } from '@/utils/eventBus';
 import { CacheKey } from '@/types/index';
 
-import { useStore } from '@/store';
-
 export enum EnvMaps {
   t_env_night = 't_env_night',
   t_env_light = 't_env_light',
@@ -49,6 +47,14 @@ export interface ModelGroup extends THREE.Group {
 enum ColorParamType {
   preset = 0,
   custom = 1,
+}
+
+interface CustomColor {
+  col: THREE.Color;
+  hsl: { h: number; s: number; l: number };
+  bgUrl: string;
+  rough: number;
+  metal: number;
 }
 
 /**
@@ -122,8 +128,23 @@ export class SceneManager {
   // 是否按压
   isClickEffect = false;
 
-  // 固定temp
-  // private _tempColor = new THREE.Color();
+  // customColor params
+  customColorParams: {
+    col: THREE.Color;
+    hsl: { h: number; s: number; l: number };
+    bgUrl: string;
+    rough: number;
+    metal: number;
+  } = {
+    col: new THREE.Color(),
+    hsl: { h: 0, s: 0, l: 0 },
+    bgUrl: 'custom.png',
+    rough: 0,
+    metal: 0,
+  };
+  // 是否使用body贴图
+  private isUsingBodyTexture = false;
+  private currentColorName = 'custom';
 
   private constructor(canvas: HTMLCanvasElement) {
     if (typeof window === 'undefined') {
@@ -174,6 +195,13 @@ export class SceneManager {
 
     this.modelManager = ModelManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
+
+    this.customColorParams = sceneConfig.colors.get('custom') as CustomColor;
+    /**
+     * 点击绑定事件
+     */
+    // JO  eventBus
+    this.bindEvents();
   }
 
   public static getInstance(container?: HTMLCanvasElement): SceneManager {
@@ -399,6 +427,8 @@ export class SceneManager {
     ) as ModelGroup;
     const sm_simpleCarMeshData = sm_simpleCarModelCache?.userData?.meshData as ModelMeshData;
     sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
+
+    this.handleRequestColorList();
   }
 
   public async createScene(): Promise<void> {
@@ -478,12 +508,6 @@ export class SceneManager {
       this.camera
     );
 
-    /**
-     * 点击绑定事件
-     */
-    // xxxx  JO
-    this.bindEvents();
-
     // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
     // const R = r.addNode(new $O(A, U));
     this.carMotionManager = new CarMotionManager(carModelCache, this.cameraManager);
@@ -503,7 +527,7 @@ export class SceneManager {
     // r.addNode(iB) sm_linecar
     this.modelManager.initLinecarModel();
     // r.addNode(lB) sm_carradar -> m_radarPoints
-    let pointMaterial = this.materialManager.getRadarPointMaterial();
+    const pointMaterial = this.materialManager.getRadarPointMaterial();
     this.modelManager.initCarRadarPointsModel(pointMaterial);
     // r.addNode(rB) sm_carradar
     this.modelManager.initCarradarModel();
@@ -570,11 +594,11 @@ export class SceneManager {
 
     // let r = Ae.getCustomParams()
     const r = this.getCustomParams();
-    if (r) eventBus.emit('ChangeColor', { param: r });
+    if (r) eventBus.emit('ChangeColor', r);
   }
 
   // 模块切换处理 eventBus.on('UPDATESHOWINGSTATE')
-  handleModuleChange(module?: Module): void {
+  handleModuleChange = ({ module }: { module: Module }): void => {
     console.log('handleModuleChange', module);
     this.currentModule = module || 0;
 
@@ -683,7 +707,7 @@ export class SceneManager {
         this.screenshotManager!.show();
         break;
     }
-  }
+  };
 
   // 场景过渡
   public transitionModuel(
@@ -799,6 +823,12 @@ export class SceneManager {
       {
         model: this.modelManager.carRadarPointModel,
         func: (val: number) => this.modelManager.setRadarPointsVisibility(val),
+        duration: undefined,
+        delay: undefined,
+      },
+      {
+        model: this.modelManager.carRadarModel,
+        func: (val: number) => this.modelManager.setCarRadarVisibility(val),
         duration: undefined,
         delay: undefined,
       },
@@ -1030,28 +1060,18 @@ export class SceneManager {
   }
 
   // 处理切换颜色
-  handleColorChange(index: 'custom' | string | 0): void {
-    this.currentColorIndex = index;
+  // handleChangeColor(index: 'custom' | string | 0): void {
+  //   this.currentColorIndex = index;
 
-    // 警车
-    if (index === '11') {
-      sceneConfig.u_policeColorChange.value = 1;
-      sceneConfig.sm_car_lightbar.visible = true;
-    } else {
-      sceneConfig.u_policeColorChange.value = 0;
-      sceneConfig.sm_car_lightbar.visible = false;
-    }
-
-    // const {
-    //   col: Pe,
-    //   tcar: Be,
-    //   tw: Re,
-    //   twr: ct,
-    //   metal: et,
-    //   rough: Ze,
-    //   tf: Nt,
-    // } = sceneConfig.colors.get(index);
-  }
+  //   // 警车
+  //   if (index === '11') {
+  //     sceneConfig.u_policeColorChange.value = 1;
+  //     sceneConfig.sm_car_lightbar.visible = true;
+  //   } else {
+  //     sceneConfig.u_policeColorChange.value = 0;
+  //     sceneConfig.sm_car_lightbar.visible = false;
+  //   }
+  // }
 
   // 后期处理
   private initPostProcessing(): void {
@@ -1091,7 +1111,7 @@ export class SceneManager {
       }
 
       // 模块1, 汽车移动
-      this.currentModule == 1 &&
+      (this.currentModule == 1 || this.currentModule == 4) &&
         // this.isClickEffect &&
         this.carMotionManager &&
         this.carMotionManager.update(deltaTime, this.u_speedUpBackgroundValue);
@@ -1119,10 +1139,10 @@ export class SceneManager {
       // 环境贴图更新
       this.envManager && this.envManager.update();
 
-      this.composer?.render();
+      // 5 -> 截图
+      this.currentModule == 4 && this.screenshotManager && this.screenshotManager.render();
 
-      // 4 -> 截图
-      this.screenshotManager && this.screenshotManager.render();
+      this.composer?.render();
     };
 
     render();
@@ -1180,9 +1200,8 @@ export class SceneManager {
 
   private onPointerUp = () => {
     console.log('onPointerUp');
-
-    this.handleClickEffect(false);
     this.isClickEffect = false;
+    this.handleClickEffect(false);
   };
 
   // 点击效果
@@ -1231,7 +1250,7 @@ export class SceneManager {
 
           gsap.killTweensOf(sceneConfig.u_carMetalness);
           gsap.to(sceneConfig.u_carMetalness, {
-            value: Math.max(0, sceneConfig.u_carMetalness.value - 0.3),
+            value: sceneConfig.colors.get(this.currentColorName)?.metal ?? 0,
             duration: 1,
             ease: 'cubic.in',
           });
@@ -1302,13 +1321,13 @@ export class SceneManager {
           );
           // m.s1_cpcl.show(0.5, 0.2)
           this.modelManager.showModel(
-            this.modelManager.weiyiModel,
+            this.modelManager.lightbarModel,
             (val: number) => this.modelManager.setLightbarVisibility(val),
             0.5,
             0.2
           );
 
-          this.cameraManager!.targetFov = 25;
+          this.cameraManager!.targetFov = 45; // orbit return
           this.cameraManager!._springlengthOffset = 20;
           this.cameraManager!._lerpStrength = 1.5;
           this.cameraManager!._moveSpeed = [0.1, 0.1];
@@ -1335,8 +1354,105 @@ export class SceneManager {
     }
   }
 
+  setColor = ({ col }: { col: THREE.Color }) => {
+    console.log('col', col);
+
+    col.getHSL(this.customColorParams.hsl);
+    this.customColorParams.col.copy(col).convertSRGBToLinear();
+  };
+
+  handleChangeColor = (colorName?: string) => {
+    // 警灯
+    if (colorName && colorName == '11') {
+      this.modelManager.lightbarModel.model!.visible = true;
+    } else {
+      this.modelManager.lightbarModel.model!.visible = false;
+    }
+
+    const { col, hsl, bgUrl, rough, metal, carCover, carWindowFilm, carWindowRoughness, floorMap } =
+      sceneConfig.colors.get(colorName || 'custom');
+
+    console.log('col', col);
+    console.log('rough', rough);
+
+    const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
+    const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
+    const carBody = carMeshData.materials.Car_body as THREE.MeshStandardMaterial;
+
+    if (carCover) {
+      carBody.map = carCover.value;
+    } else {
+      carBody.map = sceneConfig.ut_white.value;
+    }
+
+    if (carCover || this.isUsingBodyTexture) {
+      sceneConfig.u_carColor.value.copy(new THREE.Color(0, 0, 0));
+    }
+
+    this.isUsingBodyTexture = !!carCover;
+
+    if (this.currentColorName !== 'custom' || colorName !== 'custom') {
+      gsap.killTweensOf([
+        sceneConfig.u_carColor,
+        sceneConfig.u_carRoughness,
+        ,
+        sceneConfig.u_carMetalness,
+      ]);
+
+      gsap
+        .timeline()
+        .to(sceneConfig.u_carColor.value, { r: col.r, g: col.g, b: col.b, duration: 0.2 })
+        .to(sceneConfig.u_carRoughness, { value: rough || 0, duration: 0.2 }, 0)
+        .to(sceneConfig.u_carMetalness, { value: metal || 0, duration: 0.2 }, 0);
+    } else {
+      sceneConfig.u_carColor.value.copy(col);
+      sceneConfig.u_carRoughness.value = rough ?? 0;
+      sceneConfig.u_carMetalness.value = metal ?? 0;
+    }
+
+    colorName && (this.currentColorName = colorName);
+
+    const carWindowMaterial = carMeshData.materials.Car_window as THREE.MeshStandardMaterial;
+
+    if (carWindowFilm && carWindowRoughness) {
+      carWindowMaterial.color = new THREE.Color(0xffffff).convertSRGBToLinear();
+      carWindowMaterial.opacity = 1;
+      carWindowMaterial.roughness = 1;
+      console.log('carWindowFilm', carWindowFilm);
+      carWindowMaterial.map = carWindowFilm.value;
+      carWindowMaterial.roughnessMap = carWindowRoughness.value;
+      carWindowMaterial.metalnessMap = carWindowRoughness.value;
+    } else {
+      carWindowMaterial.color = sceneConfig.u_m_car_window_orignData.color;
+      carWindowMaterial.opacity = sceneConfig.u_m_car_window_orignData.opacity;
+      carWindowMaterial.roughness = sceneConfig.u_m_car_window_orignData.roughness;
+      carWindowMaterial.map = sceneConfig.ut_white.value;
+      carWindowMaterial.roughnessMap = sceneConfig.ut_dark.value;
+      carWindowMaterial.metalnessMap = sceneConfig.ut_white.value;
+    }
+
+    sceneConfig.ut_floorMap.value = floorMap ? floorMap.value : sceneConfig.ut_white.value;
+  };
+
+  handleRequestColorList(): void {
+    const colorList = sceneConfig.colors as Map<string, ColorThemeItem | CustomColor>;
+
+    eventBus.emit('ReturnColorList', colorList);
+  }
+
   // 点击绑定
   bindEvents(): void {
+    eventBus.on('ChangeModule', this.handleModuleChange.bind(this));
+    eventBus.on('ChangeColor', this.handleChangeColor.bind(this));
+
+    eventBus.on('RequestColorList', this.handleRequestColorList.bind(this));
+    eventBus.on('ChangeColor:ChangeHue', this.handleChangeColor.bind(this));
+    eventBus.on('ChangeColor:ChangeS', this.handleChangeColor.bind(this));
+    eventBus.on('ChangeColor:ChangeL', this.handleChangeColor.bind(this));
+    eventBus.on('ChangeColor:ChangeMetal', this.handleChangeColor.bind(this));
+    eventBus.on('ChangeColor:ChangeRough', this.handleChangeColor.bind(this));
+    eventBus.on('ChangeColor:SetColor', this.setColor.bind(this));
+
     if (!this.renderer?.domElement) return;
 
     this.unbindEvents();
@@ -1346,6 +1462,17 @@ export class SceneManager {
 
   // 点击解绑
   unbindEvents(): void {
+    eventBus.off('ChangeModule', this.handleModuleChange);
+    eventBus.off('ChangeColor', this.handleChangeColor);
+
+    eventBus.off('RequestColorList', this.handleRequestColorList);
+    eventBus.off('ChangeColor:ChangeHue', this.handleChangeColor);
+    eventBus.off('ChangeColor:ChangeS', this.handleChangeColor);
+    eventBus.off('ChangeColor:ChangeL', this.handleChangeColor);
+    eventBus.off('ChangeColor:ChangeMetal', this.handleChangeColor);
+    eventBus.off('ChangeColor:ChangeRough', this.handleChangeColor);
+    eventBus.off('ChangeColor:SetColor', this.setColor);
+
     if (!this.renderer?.domElement) return;
 
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);

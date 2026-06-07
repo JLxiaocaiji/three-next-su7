@@ -24,8 +24,8 @@ export const useScreenshotStore = create<State>()(
 
       // 截图相关
       setScreenshot: (picUrl: string, width: number, height: number, visible: boolean) =>
-        set((state) => {
-          state.screenshot = {
+        set((draft) => {
+          draft.screenshot = {
             picUrl,
             width,
             height,
@@ -33,8 +33,8 @@ export const useScreenshotStore = create<State>()(
           };
         }),
       setScreenshotVisible: (visible: boolean) =>
-        set((state) => {
-          state.screenshot.visible = visible;
+        set((draft) => {
+          draft.screenshot.visible = visible;
         }),
 
       cleanup: () => {},

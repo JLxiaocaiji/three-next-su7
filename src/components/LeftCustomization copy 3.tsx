@@ -1,56 +1,38 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/store';
 import * as THREE from 'three';
-import { useShallow } from 'zustand/react/shallow';
-import { hsvaToRgbString, hsvaToRgbaString } from '@uiw/color-convert';
+import { hsvaToRgbaString } from '@uiw/color-convert';
 import { Hue, Saturation, ShadeSlider, Alpha, Slider } from '@uiw/react-color';
 
 import { eventBus } from '@/utils/eventBus';
-import { sceneConfig } from '@/lib/manager/constantsConfig';
-import { useColorStore } from '@/store/useColorStore';
 
-// H 决定是什么颜色 0°/360 = 红，60°= 黄，120°= 绿，180°= 青，240°= 蓝，300°= 紫
-// 饱和度 S  颜色鲜艳程度：发灰 -> 艳丽
-// 亮度 L  颜色明暗程度：黑 -> 白
+/**
+hsva = {
+  h: 0~360,    // 色相
+  s: 0~1,      // 饱和度
+  v: 0~1,      // 明度
+  a: 0~1       // 透明度（不用管）
+}
+ * @returns 
+ */
 
-// 模型	            H 色相	  S 饱和度	   V 明度 / L 亮度	A 透明度
-// HSVA（选择器）	  0 ~ 360   0 ~ 100	    0 ~ 100	         0 ~ 1
-// HSL（Three.js） 0 ~ 1	    0 ~ 1	       0 ~ 1	        0 ~ 1
-
+const custom = {
+  col: new THREE.Color('#ffc03f').convertSRGBToLinear(),
+  hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
+  bgUrl: 'custom.png',
+  rough: 0.03,
+  metal: 0.1,
+};
 export default function LeftCustomization({ currentModule }: { currentModule: number }) {
+  const [hsva, setHsva] = useState({ h: 0, s: 0, v: 0, a: 1 });
+
+  const [color, setColor] = useState('#4a86ff');
+
+  const [value, setValue] = useState(20);
+
   const isVisible = currentModule === 5;
-
-  // 色相
-  const colorList = useColorStore((state) => state.colorList);
-  const customColor = colorList.get('custom')!;
-  const { h, s, l } = customColor.hsl;
-  const { metal, rough } = customColor;
-  const updateHue = useColorStore((state) => state.updateHue);
-  const updateL = useColorStore((state) => state.updateL);
-  const updateS = useColorStore((state) => state.updateS);
-  const updateMetal = useColorStore((state) => state.updateMetal);
-  const updateRough = useColorStore((state) => state.updateRough);
-
-  const hsva = { h: h * 360, s: s * 100, v: l * 100, a: 1 };
-
-  const updateColor = useColorStore((state) => state.updateColor);
-
-  // const gradient = useMemo(() => {
-  //   // 左边：s=0，v保持不变
-  //   const leftColor = hsvToRgb({ h: color.h, s: 0, v: color.v });
-  //   // 右边：s=1，v保持不变
-  //   const rightColor = hsvToRgb({ h: color.h, s: 1, v: color.v });
-
-  //   return `linear-gradient(to right,
-  //     rgb(${leftColor.r}, ${leftColor.g}, ${leftColor.b}),
-  //     rgb(${rightColor.r}, ${rightColor.g}, ${rightColor.b})
-  //   )`;
-  // }, [color.h, color.v]);
-
-  const leftColor = hsvaToRgbString({ ...hsva, s: 0 });
-  const rightColor = hsvaToRgbString({ ...hsva, s: 100 });
 
   const CustomPointer = () => (
     <div
@@ -60,6 +42,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
         borderRadius: '50%',
         backgroundColor: '#fff',
         boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+        // 在这里直接偏移，不依赖任何外部 CSS 文件
         transform: 'translate(-6px, -9px)',
       }}
     />
@@ -79,104 +62,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
               // transform: isVisible ? 'translateX(0)' : 'translateX(-20px)',
             }}
           >
-            <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
-              <div className="LeftCustomBar-content">
-                <div className="LeftCustomBar-top">
-                  <div className="Slider-content" style={{ opacity: 1, transform: 'none' }}>
-                    <div className="Slider-table">
-                      <p>色相</p>
-                      <Hue
-                        className="SliderHue"
-                        hue={h * 360}
-                        onChange={(newHue) => {
-                          console.log('newHue', newHue.h / 360);
-                          updateHue(newHue.h / 360);
-                        }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                      />
-                    </div>
-
-                    <div className="Slider-table">
-                      <p>饱和度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
-                        hsva={{ ...hsva, a: s }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('color', color);
-                          updateS(color.a);
-                        }}
-                      />
-                    </div>
-
-                    <div className="Slider-table">
-                      <p>明度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, ${`rgb(0, 0, 0)`}, ${hsvaToRgbaString({ h: h * 360, s: s * 100, v: 50, a: 1 })}, ${`rgb(255, 255, 255)`})`}
-                        hsva={{ ...hsva, a: l }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateL(color.a);
-                        }}
-                      />
-                    </div>
-
-                    <div className="Slider-table">
-                      <p>金属度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: metal }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateMetal(color.a);
-                        }}
-                      />
-                    </div>
-
-                    <div className="Slider-table">
-                      <p>粗糙度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: rough }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateRough(color.a);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* <div
+            <div
               style={{
                 opacity: 1,
                 transform: 'translateY(-50%) rotate(-90deg)',
@@ -199,6 +85,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                   }}
                 >
                   <div
+                    // className="Slider-content"
                     style={{
                       width: '20rem',
                       height: '16rem',
@@ -207,6 +94,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       alignItems: 'center',
                     }}
                   >
+                    {/* 色相 */}
                     <div
                       style={{
                         display: 'flex',
@@ -229,6 +117,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         粗糙度
                       </p>
                       <Hue
+                        className="SliderHue1"
                         direction="vertical"
                         reverse={true}
                         hue={hsva.h}
@@ -268,6 +157,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         金属度
                       </p>
                       <Hue
+                        className="SliderHue1"
                         direction="vertical"
                         reverse={true}
                         hue={hsva.h}
@@ -307,6 +197,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         明度
                       </p>
                       <Hue
+                        className="SliderHue1"
                         direction="vertical"
                         reverse={true}
                         hue={hsva.h}
@@ -348,6 +239,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         饱和度
                       </p>
                       <Hue
+                        className="SliderHue1"
                         direction="vertical"
                         reverse={true}
                         hue={hsva.h}
@@ -389,6 +281,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         色相
                       </p>
                       <Hue
+                        className="SliderHue1"
                         direction="vertical"
                         reverse={true}
                         hue={hsva.h}
@@ -408,8 +301,30 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                   </div>
                 </div>
               </div>
-            </div> */}
+            </div>
           </div>
+
+          {/* <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
+            <div className="LeftCustomBar-content">
+              <div className="LeftCustomBar-top">
+                <div className="Slider-content" style={{ opacity: 1, transform: 'none' }}>
+                  <div className="Slider-table">
+                    <p>色相</p>
+                    <Hue
+                      className="SliderHue"
+                      hue={hsva.h}
+                      onChange={(newHue) => {
+                        setHsva({ ...hsva, ...newHue });
+                      }}
+                      style={{
+                        borderRadius: '50%',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div> */}
 
           {/* 截图按钮 */}
           <div

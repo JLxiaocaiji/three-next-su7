@@ -930,7 +930,7 @@ export class ModelManager {
     });
   }
 
-  // sm_carradar
+  // sm_carradar points
   public initCarRadarPointsModel(pointMaterial: THREE.ShaderMaterial) {
     // if (this.carRadarPointModel.instancedMesh) return;
     const geometry = new THREE.PlaneGeometry(0.1, 0.1);
@@ -983,6 +983,11 @@ export class ModelManager {
     this.carRadarModel.materials = model.userData.meshData.materials;
     this.carRadarModel.model = model;
 
+    if (!this.sceneManager) {
+      this.sceneManager = SceneManager.getInstance();
+    }
+    this.sceneManager.scene.add(model);
+
     // 默认隐藏
     this.setCarRadarVisibility(0);
   }
@@ -995,7 +1000,7 @@ export class ModelManager {
     value = THREE.MathUtils.clamp(value, 0, 1);
     this.carRadarModel.visibility = value;
 
-    sceneConfig.u_floor_typeSwitch.value = 0;
+    sceneConfig.u_floor_typeSwitch.value = value;
 
     model.visible = value >= 0.005;
 

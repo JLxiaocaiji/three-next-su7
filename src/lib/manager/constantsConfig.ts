@@ -75,7 +75,7 @@ class SceneConfig {
   };
 
   // 颜色系统
-  public colors: Map<string, ColorThemeItem>;
+  public colors: Map<string, ColorThemeItem | CustomColor>;
   public u_carColor: { value: Color };
   public u_carMetalness: { value: number };
   public u_carRoughness: { value: number };
@@ -144,13 +144,13 @@ class SceneConfig {
     };
 
     // 颜色配置表
-    this.colors = new Map<string, ColorThemeItem>([
+    this.colors = new Map<string, ColorThemeItem | CustomColor>([
       [
         'custom',
         {
           col: new Color('#ffc03f').convertSRGBToLinear(),
           hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
-          bgUrl: 'custom.png',
+          bgUrl: 'custom.webp',
           rough: 0.03,
           metal: 0.1,
         },
@@ -159,7 +159,7 @@ class SceneConfig {
         '00',
         {
           col: new Color('#25d6e9').convertSRGBToLinear(),
-          bgUrl: 'b1.png',
+          bgUrl: 'b1.webp',
           metal: 0.16,
         },
       ],
@@ -167,7 +167,7 @@ class SceneConfig {
         '01',
         {
           col: new Color('#7c8670').convertSRGBToLinear(),
-          bgUrl: 'b2.png',
+          bgUrl: 'b2.webp',
           metal: 0.17,
         },
       ],
@@ -175,7 +175,7 @@ class SceneConfig {
         '02',
         {
           col: new Color('#9C9C9C').convertSRGBToLinear(),
-          bgUrl: 'b3.png',
+          bgUrl: 'b3.webp',
           metal: 0.16,
         },
       ],
@@ -183,14 +183,14 @@ class SceneConfig {
         '03',
         {
           col: new Color('#D9D9D9').convertSRGBToLinear(),
-          bgUrl: 'b4.png',
+          bgUrl: 'b4.webp',
         },
       ],
       [
         '04',
         {
           col: new Color('#7C6D83').convertSRGBToLinear(),
-          bgUrl: 'b5.png',
+          bgUrl: 'b5.webp',
           rough: 0.03,
           metal: 0.27,
         },
@@ -199,7 +199,7 @@ class SceneConfig {
         '05',
         {
           col: new Color('#d15523').convertSRGBToLinear(),
-          bgUrl: 'b6.png',
+          bgUrl: 'b6.webp',
           rough: 0.13,
         },
       ],
@@ -207,14 +207,14 @@ class SceneConfig {
         '06',
         {
           col: new Color('#7495be').convertSRGBToLinear(),
-          bgUrl: 'b7.png',
+          bgUrl: 'b7.webp',
         },
       ],
       [
         '07',
         {
           col: new Color('#54657f').convertSRGBToLinear(),
-          bgUrl: 'b8.png',
+          bgUrl: 'b8.webp',
           rough: 0.12,
           metal: 0.16,
         },
@@ -223,7 +223,7 @@ class SceneConfig {
         '08',
         {
           col: new Color('#2a2933').convertSRGBToLinear(),
-          bgUrl: 'b9.png',
+          bgUrl: 'b9.webp',
           metal: 0.77,
         },
       ],
@@ -231,30 +231,30 @@ class SceneConfig {
         '09',
         {
           col: new Color('#FFFFFF').convertSRGBToLinear(),
-          bgUrl: 'b10.png',
-          tcar: this.ut_car_body_t_gm,
+          bgUrl: 'b10.webp',
+          carCover: this.ut_car_body_t_gm,
         },
       ],
       [
         '10',
         {
           col: new Color('#FFFFFF').convertSRGBToLinear(),
-          bgUrl: 'b12.png',
+          bgUrl: 'b12.webp',
           rough: 0.7,
           metal: 0,
-          tcar: this.ut_car_body_t_gm2,
-          tw: this.ut_gm02_car_window_bc,
-          twr: this.ut_gm02_car_window_roughness,
-          tf: this.ut_gm02_floor_bc,
+          carCover: this.ut_car_body_t_gm2,
+          carWindowFilm: this.ut_gm02_car_window_bc,
+          carWindowRoughness: this.ut_gm02_car_window_roughness,
+          floorMap: this.ut_gm02_floor_bc,
         },
       ],
       [
         '11',
         {
           col: new Color('#FFFFFF').convertSRGBToLinear(),
-          bgUrl: 'b13.png',
-          tcar: this.ut_police_Car_body_BC,
-          tf: this.ut_police_floor_bc,
+          bgUrl: 'b13.webp',
+          carCover: this.ut_police_Car_body_BC,
+          floorMap: this.ut_police_floor_bc,
         },
       ],
     ]);
@@ -395,17 +395,5 @@ export const textureObj: TextureMapping = {
   t_env_night: 'ut_env_night',
   t_env_light: 'ut_env_light',
 };
-
-export interface ColorThemeItem {
-  col: Color;
-  hsl?: { h: number; s: number; l: number };
-  bgUrl: string;
-  rough?: number;
-  metal?: number;
-  tcar?: any;
-  tw?: any;
-  twr?: any;
-  tf?: any;
-}
 
 export const sceneConfig = new SceneConfig();

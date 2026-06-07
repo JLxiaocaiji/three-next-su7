@@ -1,4 +1,12 @@
+import { useColorStore, getColorList } from '@/store/useColorStore';
+
 export default function Bottom({ currentModule }: { currentModule: Module }) {
+  const customColor = useColorStore((state) => state.colorList.get('custom'));
+  const colorName = useColorStore((state) => state.colorName);
+  const changeColor = useColorStore((state) => state.changeColor);
+
+  const colorList: Map<string, ColorThemeItem | CustomColor> = getColorList();
+
   return (
     <>
       {/* bottom */}
@@ -6,25 +14,25 @@ export default function Bottom({ currentModule }: { currentModule: Module }) {
         <div className="ColorBar-container" style={{ opacity: 1, transform: 'none' }}>
           <div className="ColorBar-content">
             <div style={{ display: 'flex', opacity: 1, transform: 'none' }}>
-              <div
-                className="Bar"
-                style={{
-                  backgroundColor: 'rgb(255, 192, 63)',
-                  backgroundImage: 'url(/icon/custom.webp)',
-                }}
-              ></div>
-              <div className="Bar" style={{ backgroundImage: 'url(/icon/b1.webp)' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b2.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b3.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b4.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b5.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b6.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b7.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b8.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b9.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b10.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b12.webp")' }}></div>
-              <div className="Bar" style={{ backgroundImage: 'url("/icon/b13.webp")' }}></div>
+              {Array.from(colorList.keys()).map((item, index) => (
+                <div
+                  key={item}
+                  className="Bar"
+                  style={{
+                    ...(item === 'custom'
+                      ? {
+                          backgroundColor: `hsl(${customColor.hsl.h * 360}, ${customColor.hsl.s * 100}%, ${customColor.hsl.l * 100}%)`,
+                        }
+                      : {}),
+                    backgroundImage: `url(/icon/${colorList.get(item)!.bgUrl})`,
+                  }}
+                  onClick={() => {
+                    colorName !== item && changeColor(item);
+                  }}
+                >
+                  {colorName == item && <div className="Bar-Line" />}
+                </div>
+              ))}
             </div>
           </div>
         </div>

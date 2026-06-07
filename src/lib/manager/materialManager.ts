@@ -9,7 +9,6 @@ import { sceneConfig, textureObj } from './constantsConfig';
 import { noise2d } from '@/shaders/noise2d';
 import { customVertexShader } from '@/shaders/customVertexShader';
 import { randomColorShader } from '@/shaders/randomColorShader';
-import type { WebGLShader, WebGLUniforms, WebGLProgramParametersWithUniforms } from 'three';
 
 /**
  * 材质管理器
