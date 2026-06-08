@@ -1,0 +1,13 @@
+/* 1. 先把外层容器加上类名，防止污染全局其他滑块 */
+.hueWrapper :global(.w-color-alpha-fill) {
+  /* 核心黑科技：使用 CSS 新特性 translate 属性！
+    组件库修改的是 transform: translateY(XX%)，
+    而我们用独立的 translate 属性去微调，两者不会互相覆盖，能完美叠加！
+  */
+  translate: -6px -9px !important;
+
+  /* 如果上面的新特性在旧浏览器不兼容，也可以强行用 transform 覆盖，
+    但必须把组件库可能用到的动态变量（比如 --color-pointer-top 之类的，如果有的话）带上。
+    如果它纯写死在 style 里，最稳妥的还是下面方案二或方案三。
+  */
+}

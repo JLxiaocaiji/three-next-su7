@@ -1,9 +1,9 @@
 import { useColorStore, getColorList } from '@/store/useColorStore';
-
 export default function Bottom({ currentModule }: { currentModule: Module }) {
   const customColor = useColorStore((state) => state.colorList.get('custom'));
   const colorName = useColorStore((state) => state.colorName);
   const changeColor = useColorStore((state) => state.changeColor);
+  const toggleColorChooseVisible = useColorStore((state) => state.toggleColorChooseVisible);
 
   const colorList: Map<string, ColorThemeItem | CustomColor> = getColorList();
 
@@ -21,12 +21,13 @@ export default function Bottom({ currentModule }: { currentModule: Module }) {
                   style={{
                     ...(item === 'custom'
                       ? {
-                          backgroundColor: `hsl(${customColor.hsl.h * 360}, ${customColor.hsl.s * 100}%, ${customColor.hsl.l * 100}%)`,
+                          backgroundColor: `hsl(${customColor!.hsl!.h * 360}, ${customColor!.hsl!.s * 100}%, ${customColor!.hsl!.l * 100}%)`,
                         }
                       : {}),
                     backgroundImage: `url(/icon/${colorList.get(item)!.bgUrl})`,
                   }}
                   onClick={() => {
+                    toggleColorChooseVisible(item === 'custom');
                     colorName !== item && changeColor(item);
                   }}
                 >

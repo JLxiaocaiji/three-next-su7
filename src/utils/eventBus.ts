@@ -46,11 +46,7 @@ type Events = {
   /**
    * 场景5相关
    */
-  'ChangeColor:ChangeHue': undefined;
-  'ChangeColor:ChangeS': undefined;
-  'ChangeColor:ChangeL': undefined;
-  'ChangeColor:ChangeMetal': undefined;
-  'ChangeColor:ChangeRough': undefined;
+  'ChangeColor:ChangeColorParam': CustomColor;
   'ChangeColor:SetColor': { col: THREE.Color };
 
   // UI 发送给 ScreenshotManager 的指令

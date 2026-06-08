@@ -1372,6 +1372,7 @@ export class SceneManager {
     const { col, hsl, bgUrl, rough, metal, carCover, carWindowFilm, carWindowRoughness, floorMap } =
       sceneConfig.colors.get(colorName || 'custom');
 
+    console.log('col', new THREE.Color('#ffc03f').convertSRGBToLinear());
     console.log('col', col);
     console.log('rough', rough);
 
@@ -1440,18 +1441,18 @@ export class SceneManager {
     eventBus.emit('ReturnColorList', colorList);
   }
 
+  changeColorParam = (col: CustomColor) => {
+    sceneConfig.colors.set('custom', col);
+    this.handleChangeColor();
+  };
+
   // 点击绑定
   bindEvents(): void {
     eventBus.on('ChangeModule', this.handleModuleChange.bind(this));
     eventBus.on('ChangeColor', this.handleChangeColor.bind(this));
 
     eventBus.on('RequestColorList', this.handleRequestColorList.bind(this));
-    eventBus.on('ChangeColor:ChangeHue', this.handleChangeColor.bind(this));
-    eventBus.on('ChangeColor:ChangeS', this.handleChangeColor.bind(this));
-    eventBus.on('ChangeColor:ChangeL', this.handleChangeColor.bind(this));
-    eventBus.on('ChangeColor:ChangeMetal', this.handleChangeColor.bind(this));
-    eventBus.on('ChangeColor:ChangeRough', this.handleChangeColor.bind(this));
-    eventBus.on('ChangeColor:SetColor', this.setColor.bind(this));
+    eventBus.on('ChangeColor:ChangeColorParam', this.changeColorParam.bind(this));
 
     if (!this.renderer?.domElement) return;
 
@@ -1466,11 +1467,7 @@ export class SceneManager {
     eventBus.off('ChangeColor', this.handleChangeColor);
 
     eventBus.off('RequestColorList', this.handleRequestColorList);
-    eventBus.off('ChangeColor:ChangeHue', this.handleChangeColor);
-    eventBus.off('ChangeColor:ChangeS', this.handleChangeColor);
-    eventBus.off('ChangeColor:ChangeL', this.handleChangeColor);
-    eventBus.off('ChangeColor:ChangeMetal', this.handleChangeColor);
-    eventBus.off('ChangeColor:ChangeRough', this.handleChangeColor);
+    eventBus.off('ChangeColor:ChangeColorParam', this.changeColorParam);
     eventBus.off('ChangeColor:SetColor', this.setColor);
 
     if (!this.renderer?.domElement) return;

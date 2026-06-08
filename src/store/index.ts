@@ -6,11 +6,6 @@ import { eventBus } from '@/utils/eventBus';
 
 type Module = 0 | 1 | 2 | 3 | 4 | 5;
 
-enum ColorParamType {
-  custom = 1,
-  preset = 2,
-}
-
 interface State {
   user: { name: string };
   setUser: (user: string) => void;

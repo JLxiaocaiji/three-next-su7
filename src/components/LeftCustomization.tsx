@@ -1,4 +1,5 @@
 'use client';
+import styles from './style.module.css';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '@/store';
@@ -19,8 +20,39 @@ import { useColorStore } from '@/store/useColorStore';
 // HSVA（选择器）	  0 ~ 360   0 ~ 100	    0 ~ 100	         0 ~ 1
 // HSL（Three.js） 0 ~ 1	    0 ~ 1	       0 ~ 1	        0 ~ 1
 
+const CustomPointer = (props: PointerProps) => {
+  // ✅ 安全解构，给 style 一个默认空对象
+  const { style = {}, className, ...rest } = props;
+
+  return (
+    <div
+      // ✅ 必须传递所有剩余props（拖拽事件都在这里）
+      {...rest}
+      // ✅ 保留组件库的className
+      className={className}
+      style={{
+        // ✅ 安全展开style（即使是undefined也不会报错）
+        ...style,
+
+        // 指针的自定义样式
+        width: '18px',
+        height: '18px',
+        borderRadius: '50%',
+        backgroundColor: '#fff',
+        boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+        cursor: 'pointer',
+        userSelect: 'none',
+
+        // ✅ 安全拼接transform，处理style.transform为undefined的情况
+        transform: `${style.transform || ''} translate(-6.5px, -9px)`,
+      }}
+    />
+  );
+};
+
 export default function LeftCustomization({ currentModule }: { currentModule: number }) {
-  const isVisible = currentModule === 5;
+  const { colorChooseVisible } = useColorStore(useShallow((state) => state));
+  const isVisible = colorChooseVisible && currentModule === 5;
 
   // 色相
   const colorList = useColorStore((state) => state.colorList);
@@ -37,33 +69,19 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
 
   const updateColor = useColorStore((state) => state.updateColor);
 
-  // const gradient = useMemo(() => {
-  //   // 左边：s=0，v保持不变
-  //   const leftColor = hsvToRgb({ h: color.h, s: 0, v: color.v });
-  //   // 右边：s=1，v保持不变
-  //   const rightColor = hsvToRgb({ h: color.h, s: 1, v: color.v });
-
-  //   return `linear-gradient(to right,
-  //     rgb(${leftColor.r}, ${leftColor.g}, ${leftColor.b}),
-  //     rgb(${rightColor.r}, ${rightColor.g}, ${rightColor.b})
-  //   )`;
-  // }, [color.h, color.v]);
-
-  const leftColor = hsvaToRgbString({ ...hsva, s: 0 });
-  const rightColor = hsvaToRgbString({ ...hsva, s: 100 });
-
-  const CustomPointer = () => (
-    <div
-      style={{
-        width: '18px',
-        height: '18px',
-        borderRadius: '50%',
-        backgroundColor: '#fff',
-        boxShadow: '0 0 4px rgba(0,0,0,0.4)',
-        transform: 'translate(-6px, -9px)',
-      }}
-    />
-  );
+  // const CustomPointer = (props: any) => (
+  //   <div
+  //     style={{
+  //       ...props.style,
+  //       width: '18px',
+  //       height: '18px',
+  //       borderRadius: '50%',
+  //       backgroundColor: '#fff',
+  //       boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+  //       transform: 'translate(-6px, -9px)',
+  //     }}
+  //   />
+  // );
 
   return (
     <>
@@ -79,7 +97,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
               // transform: isVisible ? 'translateX(0)' : 'translateX(-20px)',
             }}
           >
-            <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
+            {/* <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
               <div className="LeftCustomBar-content">
                 <div className="LeftCustomBar-top">
                   <div className="Slider-content" style={{ opacity: 1, transform: 'none' }}>
@@ -174,9 +192,9 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
-            {/* <div
+            <div
               style={{
                 opacity: 1,
                 transform: 'translateY(-50%) rotate(-90deg)',
@@ -216,6 +234,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         height: '16rem',
                         width: '4rem',
                       }}
+                      className={styles.hueWrapper}
                     >
                       <p
                         style={{
@@ -228,20 +247,22 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       >
                         粗糙度
                       </p>
-                      <Hue
+                      <Alpha
                         direction="vertical"
                         reverse={true}
-                        hue={hsva.h}
-                        pointer={CustomPointer}
+                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
+                        hsva={{ ...hsva, a: rough }}
+                        // pointer={CustomPointer}
                         style={{
                           width: '5px',
                           height: '11rem',
                           borderRadius: '10px',
                           backgroundPosition: 'left center',
+                          position: 'relative',
                         }}
                         radius="3px"
-                        onChange={(newValue) => {
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(color) => {
+                          updateRough(color.a);
                         }}
                       />
                     </div>
@@ -255,6 +276,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         height: '16rem',
                         width: '4rem',
                       }}
+                      className={styles.hueWrapper}
                     >
                       <p
                         style={{
@@ -267,11 +289,12 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       >
                         金属度
                       </p>
-                      <Hue
+                      <Alpha
                         direction="vertical"
                         reverse={true}
-                        hue={hsva.h}
-                        pointer={CustomPointer}
+                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
+                        hsva={{ ...hsva, a: metal }}
+                        // pointer={CustomPointer}
                         style={{
                           width: '5px',
                           height: '11rem',
@@ -279,8 +302,8 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           backgroundPosition: 'left center',
                         }}
                         radius="3px"
-                        onChange={(newValue) => {
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(color) => {
+                          updateMetal(color.a);
                         }}
                       />
                     </div>
@@ -294,6 +317,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         height: '16rem',
                         width: '4rem',
                       }}
+                      className={styles.hueWrapper}
                     >
                       <p
                         style={{
@@ -306,11 +330,12 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       >
                         明度
                       </p>
-                      <Hue
+                      <Alpha
                         direction="vertical"
                         reverse={true}
-                        hue={hsva.h}
-                        pointer={CustomPointer}
+                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
+                        hsva={{ ...hsva, a: l }}
+                        // pointer={CustomPointer}
                         style={{
                           width: '5px',
                           height: '11rem',
@@ -318,10 +343,8 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           backgroundPosition: 'left center',
                         }}
                         radius="3px"
-                        onChange={(newValue) => {
-                          const g = custom.col;
-                          const _ = custom.hsl;
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(color) => {
+                          updateL(color.a);
                         }}
                       />
                     </div>
@@ -335,6 +358,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         height: '16rem',
                         width: '4rem',
                       }}
+                      className={styles.hueWrapper}
                     >
                       <p
                         style={{
@@ -347,11 +371,12 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       >
                         饱和度
                       </p>
-                      <Hue
+                      <Alpha
                         direction="vertical"
+                        background={`linear-gradient(to bottom, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
                         reverse={true}
-                        hue={hsva.h}
-                        pointer={CustomPointer}
+                        hsva={{ ...hsva, a: s }}
+                        // pointer={CustomPointer}
                         style={{
                           width: '5px',
                           height: '11rem',
@@ -359,10 +384,8 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           backgroundPosition: 'left center',
                         }}
                         radius="3px"
-                        onChange={(newValue) => {
-                          const g = custom.col;
-                          const _ = custom.hsl;
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(color) => {
+                          updateS(color.a);
                         }}
                       />
                     </div>
@@ -376,6 +399,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         height: '16rem',
                         width: '4rem',
                       }}
+                      className={styles.hueWrapper}
                     >
                       <p
                         style={{
@@ -384,6 +408,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           color: '#fff',
                           width: '3rem',
                           margin: '0px 1rem 2px',
+                          pointerEvents: 'none',
                         }}
                       >
                         色相
@@ -391,24 +416,25 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                       <Hue
                         direction="vertical"
                         reverse={true}
-                        hue={hsva.h}
-                        pointer={CustomPointer}
+                        hue={h * 360}
+                        // pointer={CustomPointer}
                         style={{
                           width: '5px',
                           height: '11rem',
                           borderRadius: '10px',
                           backgroundPosition: 'left center',
+                          position: 'relative',
                         }}
                         radius="3px"
-                        onChange={(newValue) => {
-                          setHsva((prev) => ({ ...prev, h: newValue.h }));
+                        onChange={(newHue) => {
+                          updateHue(newHue.h / 360);
                         }}
                       />
                     </div>
                   </div>
                 </div>
               </div>
-            </div> */}
+            </div>
           </div>
 
           {/* 截图按钮 */}

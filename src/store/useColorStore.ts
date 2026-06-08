@@ -38,6 +38,7 @@ interface ColorEntry {
 export interface ColorStoreState {
   colorList: Map<string, ColorThemeItem | CustomColor>;
   colorName: string | 'custom';
+  colorChooseVisible: boolean;
 
   updateHue: (hue01: number) => void;
   updateS: (s: number) => void;
@@ -49,10 +50,11 @@ export interface ColorStoreState {
 
   changeColor: (colorName: string | 'custom') => void;
   requestColorList: () => void;
+  toggleColorChooseVisible: (visible: boolean) => void;
 }
 
 export const useColorStore = create<ColorStoreState>()(
-  immer((set) => {
+  immer((set, get) => {
     return {
       colorList: new Map([
         [
@@ -67,6 +69,8 @@ export const useColorStore = create<ColorStoreState>()(
         ],
       ]),
       colorName: 'custom',
+      colorChooseVisible: false,
+
       /**
        * 仅更新颜色的色相分量
        * @param hue01 - 色相值，[0, 1]
@@ -79,10 +83,9 @@ export const useColorStore = create<ColorStoreState>()(
           // 色相值在[0, 1]范围内
           color.hsl.h = Math.max(0, Math.min(1, hue01));
           // 将sRGB颜色转换为线性空间
-          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l).convertSRGBToLinear();
-
-          eventBus.emit('ChangeColor:ChangeHue', undefined);
+          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l);
         });
+        eventBus.emit('ChangeColor:ChangeColorParam', getCustomColor());
       },
       /**
        * 仅更新颜色的饱和度分量
@@ -96,10 +99,9 @@ export const useColorStore = create<ColorStoreState>()(
           // 值在[0, 1]范围内
           color.hsl.s = Math.max(0, Math.min(1, s));
           // 将sRGB颜色转换为线性空间
-          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l).convertSRGBToLinear();
-
-          eventBus.emit('ChangeColor:ChangeS', undefined);
+          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l);
         });
+        eventBus.emit('ChangeColor:ChangeColorParam', getCustomColor());
       },
       /**
        * 仅更新颜色的明度分量
@@ -113,10 +115,9 @@ export const useColorStore = create<ColorStoreState>()(
           // 值在[0, 1]范围内
           color.hsl.l = Math.max(0, Math.min(1, l));
           // 将sRGB颜色转换为线性空间
-          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l).convertSRGBToLinear();
-
-          eventBus.emit('ChangeColor:ChangeL', undefined);
+          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l);
         });
+        eventBus.emit('ChangeColor:ChangeColorParam', getCustomColor());
       },
 
       /**
@@ -126,13 +127,12 @@ export const useColorStore = create<ColorStoreState>()(
       updateMetal: (metal: number) => {
         set((draft) => {
           const color = draft.colorList.get('custom');
-          if (!color || !color.metal) return;
+          if (!color || typeof color.metal !== 'number') return;
 
           // 值在[0, 1]范围内
           color.metal = Math.max(0, Math.min(1, metal));
-
-          eventBus.emit('ChangeColor:ChangeMetal', undefined);
         });
+        eventBus.emit('ChangeColor:ChangeColorParam', getCustomColor());
       },
 
       /**
@@ -142,14 +142,13 @@ export const useColorStore = create<ColorStoreState>()(
       updateRough: (rough: number) => {
         set((draft) => {
           const color = draft.colorList.get('custom');
-          if (!color || !color.rough) return;
+          if (!color) return;
 
           // 值在[0, 1]范围内
           color.rough = Math.max(0, Math.min(1, rough));
-
-          console.log('rough', color.rough);
-          eventBus.emit('ChangeColor:ChangeRough', undefined);
         });
+
+        eventBus.emit('ChangeColor:ChangeColorParam', getCustomColor());
       },
 
       /**
@@ -163,8 +162,7 @@ export const useColorStore = create<ColorStoreState>()(
 
           Object.assign(color.hsl, hsl);
 
-          // 重新计算并转换到线性空间
-          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l).convertSRGBToLinear();
+          color.col.setHSL(color.hsl.h, color.hsl.s, color.hsl.l);
         });
       },
 
@@ -176,34 +174,53 @@ export const useColorStore = create<ColorStoreState>()(
       setColor: (targetColor: THREE.Color) => {
         set((draft) => {
           let color = draft.colorList.get('custom');
-          if (!color || !color.hsl) return;
-          if (color) {
-            // 2. 已有颜色 → 直接修改
-            color.col.copy(targetColor).convertSRGBToLinear();
-            targetColor.getHSL(color.hsl);
-          } else {
-            const newColor = {
+          if (!color) {
+            color = {
               col: new THREE.Color('#ffc03f').convertSRGBToLinear(),
-              hsl: {
-                h: 40.31 / 360,
-                s: 1,
-                l: 0.6235,
-              },
-              metal: 0.1,
+              hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
+              bgUrl: 'custom.webp',
               rough: 0.03,
-              bgUrl: 'custom.png',
+              metal: 0.1,
             };
-
-            newColor.col.copy(targetColor).convertSRGBToLinear();
-            targetColor.getHSL(newColor.hsl);
             draft.colorList.set('custom', color);
           }
+
+          color.col.copy(targetColor);
+          color.col.getHSL(color.hsl);
         });
       },
 
+      // setColor: (targetColor: THREE.Color) => {
+      //   set((draft) => {
+      //     let color = draft.colorList.get('custom');
+      //     if (!color || !color.hsl) return;
+      //     if (color) {
+      //       // 2. 已有颜色 → 直接修改
+      //       color.col.copy(targetColor).convertSRGBToLinear();
+      //       targetColor.getHSL(color.hsl);
+      //     } else {
+      //       const newColor = {
+      //         col: new THREE.Color('#ffc03f').convertSRGBToLinear(),
+      //         hsl: {
+      //           h: 40.31 / 360,
+      //           s: 1,
+      //           l: 0.6235,
+      //         },
+      //         metal: 0.1,
+      //         rough: 0.03,
+      //         bgUrl: 'custom.png',
+      //       };
+
+      //       newColor.col.copy(targetColor).convertSRGBToLinear();
+      //       targetColor.getHSL(newColor.hsl);
+      //       draft.colorList.set('custom', color);
+      //     }
+      //   });
+      // },
+
       changeColor: (colorName: string | 'custom') => {
         console.log('changeColor', colorName);
-        useColorStore.setState((draft) => {
+        set((draft) => {
           draft.colorName = colorName;
         });
         eventBus.emit('ChangeColor', colorName);
@@ -212,14 +229,22 @@ export const useColorStore = create<ColorStoreState>()(
       requestColorList: () => {
         eventBus.emit('RequestColorList');
       },
+
+      toggleColorChooseVisible: (visible: boolean) => {
+        useColorStore.setState((draft) => {
+          draft.colorChooseVisible = visible;
+        });
+      },
     };
   })
 );
 
 eventBus.on('ReturnColorList', (colorList) => {
-  useColorStore.setState((draft) => {
-    draft.colorList = colorList;
-  });
+  setTimeout(() => {
+    useColorStore.setState((draft) => {
+      draft.colorList = new Map(colorList);
+    });
+  }, 0);
 });
 
 export const getColor = (colorName: string | 'custom') => {
@@ -232,4 +257,8 @@ export const getColorList = () => {
     state.requestColorList();
   }
   return state.colorList;
+};
+
+const getCustomColor = (): CustomColor => {
+  return useColorStore.getState().colorList.get('custom') as CustomColor;
 };
