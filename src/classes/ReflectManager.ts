@@ -10,7 +10,6 @@ export class ReflectManager {
   private _renderTexture: THREE.WebGLRenderTarget;
   public material: THREE.ShaderMaterial;
 
-  // 外部赋值
   public _scene: THREE.Scene;
   public _mainCamera: THREE.PerspectiveCamera;
   public _renderer: THREE.WebGLRenderer;
@@ -141,9 +140,6 @@ export class ReflectManager {
       baseUniforms.color = { value: originalMaterial.color };
       shaderDefines.USE_MAP = '';
       baseUniforms.opacity = { value: originalMaterial.opacity };
-      // if (originalMaterial.map) {
-      //   baseUniforms.map.value = originalMaterial.map;
-      // }
 
       // 继承 粗糙度贴图
       if (originalMaterial.roughnessMap) {
@@ -231,11 +227,11 @@ export class ReflectManager {
     if (view.dot(normal) > 0) return;
     // if (view.dot(normal) > 0.2) return;
 
-    // 2. 计算镜像相机的位置
+    // 计算镜像相机的位置
     view.reflect(normal).negate();
     view.add(reflectorWorldPosition);
 
-    // 3. 计算镜像相机的朝向目标
+    // 计算镜像相机的朝向目标
     const mainCameraRotationMatrix = new THREE.Matrix4().extractRotation(
       this._mainCamera.matrixWorld
     );
@@ -247,8 +243,6 @@ export class ReflectManager {
     target.reflect(normal).negate();
     target.add(reflectorWorldPosition);
 
-    // 4. 同步基础参数并【重置投影矩阵】
-    // 先调用 updateProjectionMatrix() 恢复一个干净完整的透视矩阵，否则上一帧斜裁剪污染的矩阵会无限叠加导致渲染崩溃
     this.camera.position.copy(view);
     this.camera.near = this._mainCamera.near;
     this.camera.far = this._mainCamera.far;
@@ -260,16 +254,11 @@ export class ReflectManager {
     const mainCameraUp = new THREE.Vector3(0, 1, 0).applyMatrix4(mainCameraRotationMatrix);
     this.camera.up.copy(mainCameraUp).reflect(normal);
 
-    // 5. 使用 lookAt 让相机朝向目标，并【强制更新世界矩阵与逆矩阵】
-    // Three.js 默认只在 renderer 渲染内部才计算 camera.matrixWorldInverse（视图矩阵）。
-    // 我们在后面步骤 6 和 7 中必须用到最新的视图矩阵，所以这里必须手动调用并强制反转。
     this.camera.lookAt(target);
     this.camera.updateMatrixWorld(true);
     this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
     this.camera.clearViewOffset();
 
-    // 6. 计算纹理投影矩阵 (Texture Matrix)
-    // 映射裁剪空间坐标 [-1, 1] 到 UV 纹理坐标空间 [0, 1]
     const textureMatrix = new THREE.Matrix4(
       0.5,
       0.0,
@@ -293,7 +282,6 @@ export class ReflectManager {
     textureMatrix.multiply(this.camera.matrixWorldInverse);
     this._reflectMatrix.copy(textureMatrix);
 
-    // 7. 应用斜裁剪平面（Eric Lengyel 算法）
     // 将视锥体的近裁剪面移动并贴合到反射平面上，剔除地面下方的遮挡物，防止穿模闪烁
     this.reflectPlane.setFromNormalAndCoplanarPoint(normal, reflectorWorldPosition);
     this.reflectPlane.applyMatrix4(this.camera.matrixWorldInverse);
@@ -321,20 +309,18 @@ export class ReflectManager {
     projectionMatrix.elements[10] = clipPlane.z + 1.0 - this._clipBias;
     projectionMatrix.elements[14] = clipPlane.w;
 
-    // 8. 离屏渲染反射纹理到 WebGLRenderTarget
     const originalRenderTarget = this._renderer.getRenderTarget();
     const originalXrEnabled = this._renderer.xr.enabled;
     const originalShadowAutoUpdate = this._renderer.shadowMap.autoUpdate;
     const originalAutoClear = this._renderer.autoClear;
 
-    // 关闭不必要的全局开销（XR 设备同步、反射场景内的阴影二次计算等）
     this._renderer.xr.enabled = false;
     this._renderer.shadowMap.autoUpdate = false;
 
     this._renderer.setRenderTarget(this._renderTexture);
     this._renderer.state.buffers.depth.setMask(true);
 
-    // 在渲染反射贴图前，隐去地面本身，防止自己把自己渲染进倒影中
+    // 隐去地面
     this.reflectMesh.visible = false;
 
     if (originalAutoClear) this._renderer.clear();
@@ -343,7 +329,7 @@ export class ReflectManager {
     // 恢复地面的可见性
     this.reflectMesh.visible = true;
 
-    // 9. 彻底恢复 Renderer 渲染器状态，不污染主画布的正常渲染流程
+    // 恢复 Renderer
     this._renderer.setRenderTarget(originalRenderTarget);
     this._renderer.xr.enabled = originalXrEnabled;
     this._renderer.shadowMap.autoUpdate = originalShadowAutoUpdate;

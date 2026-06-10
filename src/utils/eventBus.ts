@@ -9,6 +9,9 @@ enum ColorParamType {
 }
 
 type Events = {
+  // 加载进度
+  LoadingProgress: { progress: number };
+
   // 改变模块
   ChangeModule: { module: Module };
   // 获取当前模块

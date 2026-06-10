@@ -275,7 +275,7 @@ export class SceneManager {
     const updatePercent = () => {
       const allLoaded = modelLoaded + materialLoaded;
       percent = Math.floor((allLoaded / total) * 100);
-      return percent;
+      eventBus.emit('LoadingProgress', { progress: percent });
     };
 
     try {
@@ -980,7 +980,7 @@ export class SceneManager {
         '<'
       );
 
-    // // 地板反射强度
+    // 地板反射强度
     gsap.killTweensOf(sceneConfig.u_floorReflectIntensity);
     gsap
       .timeline({ delay: 1.8 })
@@ -1078,6 +1078,7 @@ export class SceneManager {
     // 后期处理
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
+    this.renderPass.clear = false;
 
     this.composer.addPass(this.renderPass);
   }
@@ -1139,10 +1140,9 @@ export class SceneManager {
       // 环境贴图更新
       this.envManager && this.envManager.update();
 
-      // 5 -> 截图
-      this.currentModule == 4 && this.screenshotManager && this.screenshotManager.render();
-
       this.composer?.render();
+      // 截图
+      this.currentModule == 5 && this.screenshotManager && this.screenshotManager.render();
     };
 
     render();
@@ -1372,10 +1372,6 @@ export class SceneManager {
     const { col, hsl, bgUrl, rough, metal, carCover, carWindowFilm, carWindowRoughness, floorMap } =
       sceneConfig.colors.get(colorName || 'custom');
 
-    console.log('col', new THREE.Color('#ffc03f').convertSRGBToLinear());
-    console.log('col', col);
-    console.log('rough', rough);
-
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;
     const carBody = carMeshData.materials.Car_body as THREE.MeshStandardMaterial;
@@ -1496,6 +1492,16 @@ export class SceneManager {
       this.gui.destroy();
     }
     this.cameraManager && this.cameraManager.dispose();
+    this.scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((mat) => mat.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    });
     this.scene.clear();
     this.camera.clear();
     SceneManager.instance = null;

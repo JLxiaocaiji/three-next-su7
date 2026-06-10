@@ -51,6 +51,8 @@ export interface ColorStoreState {
   changeColor: (colorName: string | 'custom') => void;
   requestColorList: () => void;
   toggleColorChooseVisible: (visible: boolean) => void;
+
+  cleanup: () => void;
 }
 
 export const useColorStore = create<ColorStoreState>()(
@@ -235,6 +237,8 @@ export const useColorStore = create<ColorStoreState>()(
           draft.colorChooseVisible = visible;
         });
       },
+
+      cleanup: () => {},
     };
   })
 );

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
 import { useScreenshotStore } from '@/store/useScreenshotStore';
 import { eventBus } from '@/utils/eventBus';
 

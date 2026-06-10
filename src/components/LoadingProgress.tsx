@@ -1,4 +1,6 @@
-export default function LoadingProgress({ loadingProgress }: { loadingProgress: number }) {
+import { useStore, cleanupAllStores } from '@/store/index';
+
+export default function LoadingProgress() {
   // 工具函数：线性插值
   const interpolate = (val: number, min: number, max: number, start: number, end: number) => {
     if (val <= min) return start;
@@ -6,7 +8,8 @@ export default function LoadingProgress({ loadingProgress }: { loadingProgress: 
     return start + ((end - start) * (val - min)) / (max - min);
   };
 
-  // 👉 动态计算 5 个 stop 的 offset
+  const loadingProgress = useStore((state) => state.progress);
+
   const offsets = [
     interpolate(loadingProgress, 0, 100, 0, 0),
     interpolate(loadingProgress, 0, 100, 0.0029888955953756087, 0.2341),

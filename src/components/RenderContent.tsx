@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import * as THREE from 'three';
 
 import { SceneManager } from '@/lib/manager/sceneManager';
 
@@ -10,84 +8,58 @@ import { useIsSwapWidthAndHeight } from '@/hook/index';
 import { debounce } from '@/utils/index';
 
 import { useStore, cleanupAllStores } from '@/store/index';
+import { eventBus } from '@/utils/eventBus';
 
-export default function ModelPage({
-  setLoadingProgress,
-}: {
-  setLoadingProgress: (progress: number) => void;
-}) {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('准备加载');
-  const [models, setModels] = useState<Map<string, GLTF>>(new Map());
-  const [isSceneReady, setIsSceneReady] = useState(false);
-
+export default function ModelPage({}: {}) {
   const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
-  const updateSizeRef = useRef<
-    ((isSwap: boolean, viewWidth: number, viewHeight: number) => void) | null
-  >(null);
 
   const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
 
+  const setStoreSwap = useStore((state) => state.setStoreSwap);
+  const setProgress = useStore((state) => state.setProgress);
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    if (!sceneRef) return;
+
+    const handleResize = debounce((w: number, h: number, swap: boolean) => {
+      setStoreSwap(w > h);
+      if (w <= 0 || h <= 0) return;
+      sceneRef.current?.resize(w, h, swap);
+    }, 100);
+
+    const w = isSwap ? viewHeight : viewWidth;
+    const h = isSwap ? viewWidth : viewHeight;
+    handleResize(w, h, isSwap);
+  }, [isSwap, viewWidth, viewHeight, setStoreSwap]);
+
+  // sceneManager
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
     sceneRef.current = SceneManager.getInstance(containerRef.current as HTMLCanvasElement);
 
-    requestAnimationFrame(() => {
-      setIsSceneReady(true);
-    });
-
-    updateSizeRef.current = debounce((isSwap: boolean, viewWidth: number, viewHeight: number) => {
-      if (!sceneRef.current) return;
-
-      const w = isSwap ? viewHeight : viewWidth;
-      const h = isSwap ? viewWidth : viewHeight;
-
-      if (w <= 0 || h <= 0) return;
-
-      sceneRef.current.resize(w, h, isSwap);
-    }, 100);
-
-    const loadModel = async () => {
-      const percent = await sceneRef.current!.initLoad();
-      setLoadingProgress(percent);
+    const onProgress = ({ progress }: { progress: number }) => {
+      setProgress(progress);
+      if (progress === 100) {
+        sceneRef.current?.startRender();
+      }
     };
 
-    loadModel();
+    eventBus.on('LoadingProgress', onProgress);
 
-    sceneRef.current.startRender();
+    sceneRef.current.initLoad();
 
     return () => {
-      updateSizeRef.current = null;
+      eventBus.off('LoadingProgress', onProgress);
       if (!sceneRef.current) return;
-      const { scene } = sceneRef.current;
-      scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((mat) => mat.dispose());
-          } else {
-            obj.material.dispose();
-          }
-        }
-      });
-
-      cleanupAllStores();
       sceneRef.current.dispose();
       SceneManager.instance = null;
+
+      cleanupAllStores();
     };
-  }, [setLoadingProgress]);
-
-  const updateSize = useCallback(() => {
-    if (updateSizeRef.current && isSceneReady) {
-      updateSizeRef.current(isSwap, viewWidth, viewHeight);
-    }
-  }, [isSwap, viewWidth, viewHeight, isSceneReady]);
-
-  useEffect(() => {
-    updateSize();
-  }, [updateSize]);
+  }, []);
 
   return (
     <>

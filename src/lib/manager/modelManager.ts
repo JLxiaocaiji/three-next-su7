@@ -45,7 +45,7 @@ interface SpeedUpModel {
   lerpStrength: number;
 }
 
-// 尾翼模型（weiyiModel）
+// 尾翼
 export interface PositionRotationModel {
   originPos: THREE.Vector3;
   originRotZ: number;
@@ -78,7 +78,7 @@ export interface MaterialOnlyModel {
   visibility: number;
 }
 
-// 点位数据（28个坐标）
+// 点位数据
 const points = [
   [0.65, 1.04, -1.16],
   [-0.35, 1.43, -0.69],
@@ -110,10 +110,6 @@ const points = [
   [-2.69, 0.62, -0.4],
 ];
 
-/**
- * 模型管理器
- * 加载、销毁、组织模型
- */
 export class ModelManager {
   private static instance: ModelManager | null = null;
   public sceneManager: SceneManager | null = null;
@@ -155,7 +151,7 @@ export class ModelManager {
 
   private static readonly _tempVec3 = new THREE.Vector3();
 
-  // 加速相关（车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果）
+  // 加速相关
   public carSpeedUp: SpeedUpModel = {
     wheels: null,
     targetVelocity: 0,
@@ -163,7 +159,7 @@ export class ModelManager {
     lerpStrength: 1,
   };
 
-  // 'weiyi' 模型
+  // 'weiyi'
   public weiyiModel: PositionRotationModel = {
     model: null,
     originPos: new THREE.Vector3(),
@@ -301,12 +297,9 @@ export class ModelManager {
   // 加载
   async loadAllModel(onProgress?: ProgressCallback) {
     if (this.isLoading) return;
-    // 中止使用此管理器的加载器中正在进行的请求
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     this.isLoading = true;
-
-    // await Promise.resolve();
 
     try {
       const results: ModelLoadResult[] = [];
@@ -335,7 +328,7 @@ export class ModelManager {
     }
   }
 
-  // 重试
+  // retry
   private async loadWithRetry(f: ModelFileInfo, onStep: () => void): Promise<ModelLoadResult> {
     let attempt = 0;
     while (attempt <= this.maxRetries) {
@@ -390,12 +383,12 @@ export class ModelManager {
       }
 
       try {
-        const headerView = new DataView(arrayBuffer, 0, this.binConstants.fixed_head_length); // 读取 GLB 头部（固定 12 字节）
+        const headerView = new DataView(arrayBuffer, 0, this.binConstants.fixed_head_length); // 读取 GLB 头部
 
         const header: BinHeader = {
           magic: new TextDecoder().decode(new Uint8Array(arrayBuffer, 0, 4)), // 二进制转字符串 "glTF"
           version: headerView.getUint32(4, true), // glTF 版本号   2
-          length: headerView.getUint32(8, true), // 整个文件总长度
+          length: headerView.getUint32(8, true), // 文件总长度
         };
 
         const { content, body } = this.parseToContentAndBody(header, arrayBuffer);
@@ -412,7 +405,7 @@ export class ModelManager {
 
     const gltf = await this.parseGLBBuffer(glbBuffer);
 
-    const modelRoot = gltf.scene; // 拿到 3D 根节点
+    const modelRoot = gltf.scene;
     modelRoot.userData.animations = gltf.animations || ([] as THREE.AnimationClip[]);
     modelRoot.userData.meshData = this.traverseAndCollectModelData(modelRoot) as ModelMeshData;
     modelRoot.name = f.name;
@@ -449,7 +442,7 @@ export class ModelManager {
    */
   private decode(buffer: Uint8Array, key = 255) {
     for (let i = 0, len = buffer.length; i < len; i++) {
-      buffer[i] ^= key; // 异或运算
+      buffer[i] ^= key;
     }
     return buffer;
   }
@@ -481,8 +474,8 @@ export class ModelManager {
     header: BinHeader,
     buffer: ArrayBuffer
   ): { content: string; body: ArrayBuffer | null } {
-    let content = null; // 存放解析出来的 glTF JSON 字符串
-    let body = null; // 存放模型二进制数据（顶点、纹理等）
+    let content = null;
+    let body = null;
 
     // 判断是否是【加密 GLB】
     const isLegacy =
@@ -496,11 +489,11 @@ export class ModelManager {
       let offset = 0; // 读取指针
 
       while (offset < dataLength) {
-        // 读取Chunk Length：当前块有多少字节
+        // 读取Chunk Length
         const chunkLength = dataView.getUint32(offset, true);
         offset += 4;
 
-        // 如果是加密 GLB → 解密这段数据
+        // 加密 GLB
         if (isLegacy) {
           const decryptData = new Uint8Array(
             buffer,
@@ -510,13 +503,10 @@ export class ModelManager {
           this.decode(decryptData); // 调用异或解密函数
         }
 
-        // 读取【块类型】：JSON 还是 BIN
+        // JSON / BIN
         const chunkType = dataView.getUint32(offset, true);
         offset += 4;
 
-        // --------------------------
-        // 4. 根据块类型解析
-        // --------------------------
         if (chunkType === this.binConstants.JSON) {
           // JSON 块：二进制转字符串
           const jsonBytes = new Uint8Array(
@@ -526,7 +516,7 @@ export class ModelManager {
           );
           content = new TextDecoder().decode(jsonBytes);
         } else if (chunkType === this.binConstants.BIN) {
-          // 二进制块：直接切片保存（模型、纹理等）
+          // 二进制块
           const binStart = this.binConstants.fixed_head_length + offset;
           body = buffer.slice(binStart, binStart + chunkLength);
         }
@@ -549,27 +539,25 @@ export class ModelManager {
     // JSON 字符串转 UTF-8 字节数组
     const encoder = new TextEncoder();
     const jsonData = encoder.encode(content);
-    // GLB 要求 JSON chunk 数据长度必须是 4 字节对齐
+    // JSON chunk 数据长度必须是 4 字节对齐
     const jsonChunkLength = (jsonData.length + 3) & ~3; // 向上取整到 4 的倍数
     const jsonPadding = jsonChunkLength - jsonData.length;
 
-    // BIN chunk 长度（body 已经是 ArrayBuffer）
+    // BIN chunk 长度
     const binChunkLength = body.byteLength;
-    // BIN chunk 数据也需要 4 字节对齐（通常已经是，但保险处理）
     const binPaddedLength = (binChunkLength + 3) & ~3;
     const binPadding = binPaddedLength - binChunkLength;
 
     // 总文件长度 = 12 + (8 + jsonChunkLength) + (8 + binPaddedLength)
     const totalLength = 12 + 8 + jsonChunkLength + 8 + binPaddedLength;
 
-    // 4. 构建 ArrayBuffer
+    // 构建 ArrayBuffer
     const buffer = new ArrayBuffer(totalLength);
     const view = new DataView(buffer);
 
-    // 写入 GLB 头
-    const magic = 0x46546c67; // "glTF" 的小端字节序
+    const magic = 0x46546c67; // "glTF"
     view.setUint32(0, magic, true);
-    view.setUint32(4, header.version, true); // 通常是 2
+    view.setUint32(4, header.version, true);
     view.setUint32(8, totalLength, true);
 
     let offset = 12;
@@ -581,21 +569,18 @@ export class ModelManager {
     offset += 4; // "JSON" 类型
     // 复制 JSON 数据
     new Uint8Array(buffer, offset, jsonData.length).set(jsonData);
-    offset += jsonChunkLength; // 已对齐
+    offset += jsonChunkLength;
 
     // 写入 BIN chunk
     view.setUint32(offset, binPaddedLength, true);
     offset += 4;
     view.setUint32(offset, 0x004e4942, true);
     offset += 4; // "BIN\0" 类型
-    // 复制 body 数据
     new Uint8Array(buffer, offset, binChunkLength).set(new Uint8Array(body));
-    // 剩余 padding 自动为 0（无需显式填充）
 
     return buffer;
   }
 
-  // 递归遍历场景，收集所有模型数据
   private traverseAndCollectModelData(
     root: THREE.Object3D,
     result: {
@@ -621,15 +606,15 @@ export class ModelManager {
       if (node instanceof THREE.Mesh) {
         const material = node.material;
 
-        // 收集所有 Mesh
+        // 收集Mesh
         result.meshes.push(node);
 
-        // 收集材质（以材质名称为 key）
+        // 收集材质
         if (material.name) {
           result.materials[material.name] = material;
         }
 
-        // 收集材质上所有贴图（以 uuid 为 key）
+        // 收集材质上所有贴图
         let texture: THREE.Texture | null = null;
         for (const mapName of TEXTURE_PROPERTIES) {
           texture = material[mapName as keyof typeof material];
@@ -652,47 +637,10 @@ export class ModelManager {
         }
       }
     });
-
-    // 返回整理完成的数据
     return result;
   }
 
-  public static getInstanceVersion(): number {
-    return (ModelManager as any)._version || 0;
-  }
-
-  // 初始化 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-  public initCarSpeedUp() {
-    const carModel = this.modelCache.get('sm_car' as CacheKey);
-    if (!carModel) return;
-
-    this.carSpeedUp.wheels =
-      carModel.children[0].children.find((item) => item.name === 'Wheels') || null;
-  }
-  public setCarSpeedRadarVisibility(value: number) {
-    this.carSpeedUp.targetVelocity = value;
-  }
-  public setLerpStrength(r: number) {
-    this.carSpeedUp.lerpStrength = r;
-  }
-
-  public carSpeedUpUpdate(value: number) {
-    this.carSpeedUp.currentVelocity = THREE.MathUtils.lerp(
-      this.carSpeedUp.currentVelocity,
-      this.carSpeedUp.targetVelocity,
-      value * this.carSpeedUp.lerpStrength
-    );
-
-    for (const wheel of this.carSpeedUp.wheels?.children || []) {
-      wheel.rotateZ(
-        ((-this.carSpeedUp.currentVelocity * value) / (Math.PI * 0.737774)) * 2 * Math.PI
-      );
-    }
-
-    sceneConfig.u_floorUVOffset.value.x += this.carSpeedUp.currentVelocity * value;
-  }
-
-  // 初始化 weiyi 模型
+  // 初始化 weiyi
   public initWeiyiModel() {
     const carModel = this.modelCache.get('sm_car' as CacheKey);
     if (!carModel) return;
@@ -707,7 +655,7 @@ export class ModelManager {
     this.setWeiYiPosition(0);
   }
 
-  // 设置 weiyi 模型位置
+  // weiyi 模型位置
   public setWeiYiPosition(value: number) {
     if (!this.weiyiModel || !this.weiyiModel.model) return;
 
@@ -715,7 +663,6 @@ export class ModelManager {
 
     this.weiyiModel.visibility = THREE.MathUtils.clamp(value, 0, 1);
 
-    // 位置插值
     const tempPos = new THREE.Vector3();
     tempPos.copy(originPos).lerp(targetPos, this.weiyiModel.visibility);
     model!.position.copy(tempPos);
@@ -726,7 +673,6 @@ export class ModelManager {
 
   // 初始化 sm_car_lightbar
   public initLightbarModel() {
-    // 拿到灯光模型
     const lightModel = this.modelCache.get('sm_car_lightbar' as CacheKey);
     if (!lightModel || !lightModel.userData.meshData?.materials) return;
 
@@ -753,8 +699,6 @@ export class ModelManager {
   public updateLightbarIntensity() {
     const { materials, visibility } = this.lightbarModel;
     if (!materials) return;
-
-    // 原组件公式：500 * 透明度 + 1
     (materials as THREE.MeshStandardMaterial).emissiveIntensity = 500 * visibility + 1;
   }
 
@@ -765,10 +709,10 @@ export class ModelManager {
     this.lightbarModel.visibility = value;
 
     // 立即更新材质亮度
-    // this.updateLightbarIntensity();
+    this.updateLightbarIntensity();
   }
 
-  // 初始化 sm_size
+  // sm_size
   public initSizeModel() {
     const sizeModel = this.modelCache.get('sm_size' as CacheKey);
 
@@ -780,14 +724,14 @@ export class ModelManager {
     this.sceneManager?.scene.add(sizeModel);
 
     this.sizeModel.model = sizeModel;
-    // 保存材质
+
     this.sizeModel.materials = sizeModel.userData.meshData.materials;
 
-    // 初始化：隐藏
+    // 初始隐藏
     this.setSizeVisibility(0);
   }
 
-  // 设置 sm_size 显隐
+  // sm_size
   public setSizeVisibility(value: number) {
     const { materials, model } = this.sizeModel;
 
@@ -796,10 +740,9 @@ export class ModelManager {
     // 保存值
     this.sizeModel.visibility = value;
 
-    // 控制模型显隐（>=0.005 显示）
+    // >=0.005 显示
     model.visible = value >= 0.005;
 
-    // 遍历所有材质更新透明度（兼容普通材质 + 着色器材质）
     Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
@@ -822,7 +765,6 @@ export class ModelManager {
     this.curvatureModel.model = model;
     this.curvatureModel.materials = model.userData.meshData.materials;
 
-    // 初始化隐藏
     this.setCurvatureVisibility(0);
   }
 
@@ -833,10 +775,8 @@ export class ModelManager {
 
     this.curvatureModel.visibility = value;
 
-    // 控制显隐
     model.visible = value >= 0.005;
 
-    // 更新所有材质透明度
     Object.values(materials).forEach((mat: THREE.ShaderMaterial | THREE.MeshBasicMaterial) => {
       mat.opacity = value;
 
@@ -860,7 +800,6 @@ export class ModelManager {
     this.windSpeedModel.model = model;
     this.windSpeedModel.materials = model.userData.meshData.materials;
 
-    // 默认隐藏
     this.setWindSpeedVisibility(0);
   }
 
@@ -903,7 +842,6 @@ export class ModelManager {
     this.linecarModel.model = model;
     this.linecarModel.materials = model.userData.meshData.materials;
 
-    // 默认隐藏
     this.setLineCarVisibility(0);
   }
 
@@ -912,10 +850,8 @@ export class ModelManager {
 
     if (!model || !materials) return;
 
-    // 保存值
     this.linecarModel.visibility = value;
 
-    // 显隐控制
     model.visible = value >= 0.005;
 
     // 遍历材质更新
@@ -932,9 +868,7 @@ export class ModelManager {
 
   // sm_carradar points
   public initCarRadarPointsModel(pointMaterial: THREE.ShaderMaterial) {
-    // if (this.carRadarPointModel.instancedMesh) return;
     const geometry = new THREE.PlaneGeometry(0.1, 0.1);
-    // 实例化
     const instancedMesh = new THREE.InstancedMesh(geometry, pointMaterial, points.length);
     instancedMesh.frustumCulled = false;
 
@@ -988,7 +922,6 @@ export class ModelManager {
     }
     this.sceneManager.scene.add(model);
 
-    // 默认隐藏
     this.setCarRadarVisibility(0);
   }
 
@@ -1054,7 +987,7 @@ export class ModelManager {
     const { car1, car2, length, moveParams1, moveParams2 } = this.simpleCarData;
     if (!car1 || !car2) return;
 
-    // 第一辆车移动逻辑
+    // 第一辆车
     const pos1 = car1.position;
     pos1.set(pos1.x + deltaTime * moveParams1.z * moveParams1.x, pos1.y, moveParams1.y);
 
@@ -1065,7 +998,7 @@ export class ModelManager {
       this.randomUpdate(this.simpleCarData.moveParams1, car1);
     }
 
-    // 第二辆车移动逻辑
+    // 第二辆车
     const pos2 = car2.position;
 
     pos2.set(pos2.x + deltaTime * moveParams2.z * moveParams2.x, pos1.y, -moveParams2.y);
@@ -1088,7 +1021,7 @@ export class ModelManager {
 
     const meshData = model?.userData?.meshData as ModelMeshData;
 
-    meshData.materials.m_simpleCar.opacity = value; // Ag
+    meshData.materials.m_simpleCar.opacity = value;
   }
 
   // 淡出 / 角度（1 → 0）

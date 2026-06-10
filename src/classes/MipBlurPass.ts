@@ -108,9 +108,6 @@ export class MipBlurPass {
       depthWrite: false,
       depthTest: false,
     });
-
-    // 初始化一个占位纹理
-    // this.blurTexture = this._mipmapRenderTargets[0].texture;
   }
 
   update(): void {

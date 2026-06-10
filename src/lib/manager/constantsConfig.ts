@@ -148,7 +148,8 @@ class SceneConfig {
       [
         'custom',
         {
-          col: new Color('#ffc03f').convertSRGBToLinear(),
+          // col: new Color('#ffc03f').convertSRGBToLinear(),
+          col: new Color('#ffc03f'),
           hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
           bgUrl: 'custom.webp',
           rough: 0.03,

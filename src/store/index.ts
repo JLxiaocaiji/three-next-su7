@@ -10,6 +10,9 @@ interface State {
   user: { name: string };
   setUser: (user: string) => void;
 
+  progress: number;
+  setProgress: (progress: number) => void;
+
   // 模块切换
   currentModule: Module;
   setCurrentModule: (module: Module) => void;
@@ -17,6 +20,10 @@ interface State {
   // 点击效果
   isClickEffect: boolean;
   setClickEffect: (isClickEffect: boolean) => void;
+
+  // 是否长宽切换
+  isStoreSwap: boolean;
+  setStoreSwap: (isStoreSwap: boolean) => void;
 
   cleanup: () => void;
 }
@@ -27,9 +34,22 @@ export const useStore = create<State>()(
       (set, get) => {
         return {
           user: { name: '' },
+
+          progress: 0,
+          setProgress: (progress: number) =>
+            set((store) => {
+              store.progress = progress;
+            }),
+
           // 状态
           currentModule: 0,
           isClickEffect: false,
+
+          isStoreSwap: false,
+          setStoreSwap: (isStoreSwap: boolean) =>
+            set((store) => {
+              store.isStoreSwap = isStoreSwap;
+            }),
 
           setUser: (name: string) =>
             set((draft) => {
@@ -72,6 +92,12 @@ export const useStore = create<State>()(
 // eventBus.off('GetCurrentModule', getCurrentModule);
 // eventBus.on('GetCurrentModule', getCurrentModule);
 
+const loadProgress = ({ progress }: { progress: number }) => {
+  useStore.setState({ progress: progress });
+};
+eventBus.off('LoadingProgress', loadProgress);
+eventBus.on('LoadingProgress', loadProgress);
+
 // 更改模块
 const changeModule = ({ module: module }: { module: Module }) => {
   useStore.setState({ currentModule: module });
@@ -90,6 +116,9 @@ export const cleanupAllStores = () => {
   useStore.getState().cleanup();
   import('./useScreenshotStore').then(({ useScreenshotStore }) => {
     useScreenshotStore.getState().cleanup();
+  });
+  import('./useColorStore').then(({ useColorStore }) => {
+    useColorStore.getState().cleanup();
   });
 };
 

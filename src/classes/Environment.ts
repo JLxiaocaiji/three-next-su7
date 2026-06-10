@@ -159,14 +159,6 @@ class Environment {
         this._renderer.setClearAlpha(currentClearAlpha);
         this._renderer.autoClear = currentAutoClear;
       }
-      // this._renderTarget.texture.needsUpdate = true;
-      // if (this._pmremRenderTarget) {
-      //   this._pmremRenderTarget.dispose();
-      // }
-      // this._pmremRenderTarget = this._pmremGenerator.fromEquirectangular(
-      //   this._renderTarget.texture
-      // );
-      // this.pbrEnvMap = this._pmremRenderTarget.texture as THREE.CubeTexture;
       return true;
     }
     return false;

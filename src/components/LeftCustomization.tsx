@@ -20,39 +20,11 @@ import { useColorStore } from '@/store/useColorStore';
 // HSVA（选择器）	  0 ~ 360   0 ~ 100	    0 ~ 100	         0 ~ 1
 // HSL（Three.js） 0 ~ 1	    0 ~ 1	       0 ~ 1	        0 ~ 1
 
-const CustomPointer = (props: PointerProps) => {
-  // ✅ 安全解构，给 style 一个默认空对象
-  const { style = {}, className, ...rest } = props;
-
-  return (
-    <div
-      // ✅ 必须传递所有剩余props（拖拽事件都在这里）
-      {...rest}
-      // ✅ 保留组件库的className
-      className={className}
-      style={{
-        // ✅ 安全展开style（即使是undefined也不会报错）
-        ...style,
-
-        // 指针的自定义样式
-        width: '18px',
-        height: '18px',
-        borderRadius: '50%',
-        backgroundColor: '#fff',
-        boxShadow: '0 0 4px rgba(0,0,0,0.4)',
-        cursor: 'pointer',
-        userSelect: 'none',
-
-        // ✅ 安全拼接transform，处理style.transform为undefined的情况
-        transform: `${style.transform || ''} translate(-6.5px, -9px)`,
-      }}
-    />
-  );
-};
-
 export default function LeftCustomization({ currentModule }: { currentModule: number }) {
   const { colorChooseVisible } = useColorStore(useShallow((state) => state));
   const isVisible = colorChooseVisible && currentModule === 5;
+
+  const isStoreSwap = useStore((state) => state.isStoreSwap);
 
   // 色相
   const colorList = useColorStore((state) => state.colorList);
@@ -69,20 +41,6 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
 
   const updateColor = useColorStore((state) => state.updateColor);
 
-  // const CustomPointer = (props: any) => (
-  //   <div
-  //     style={{
-  //       ...props.style,
-  //       width: '18px',
-  //       height: '18px',
-  //       borderRadius: '50%',
-  //       backgroundColor: '#fff',
-  //       boxShadow: '0 0 4px rgba(0,0,0,0.4)',
-  //       transform: 'translate(-6px, -9px)',
-  //     }}
-  //   />
-  // );
-
   return (
     <>
       {isVisible && (
@@ -97,344 +55,331 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
               // transform: isVisible ? 'translateX(0)' : 'translateX(-20px)',
             }}
           >
-            {/* <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
-              <div className="LeftCustomBar-content">
-                <div className="LeftCustomBar-top">
-                  <div className="Slider-content" style={{ opacity: 1, transform: 'none' }}>
-                    <div className="Slider-table">
-                      <p>色相</p>
-                      <Hue
-                        className="SliderHue"
-                        hue={h * 360}
-                        onChange={(newHue) => {
-                          console.log('newHue', newHue.h / 360);
-                          updateHue(newHue.h / 360);
-                        }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                      />
-                    </div>
+            {isStoreSwap ? (
+              <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
+                <div className="LeftCustomBar-content">
+                  <div className="LeftCustomBar-top">
+                    <div className="Slider-content" style={{ opacity: 1, transform: 'none' }}>
+                      <div className="Slider-table">
+                        <p>色相</p>
+                        <Hue
+                          className="SliderHue"
+                          hue={h * 360}
+                          onChange={(newHue) => {
+                            updateHue(newHue.h / 360);
+                          }}
+                          style={{
+                            width: '11rem',
+                            height: '5px',
+                            borderRadius: '10px',
+                          }}
+                        />
+                      </div>
 
-                    <div className="Slider-table">
-                      <p>饱和度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
-                        hsva={{ ...hsva, a: s }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('color', color);
-                          updateS(color.a);
-                        }}
-                      />
-                    </div>
+                      <div className="Slider-table">
+                        <p>饱和度</p>
+                        <Alpha
+                          className="SliderHue"
+                          background={`linear-gradient(to right, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
+                          hsva={{ ...hsva, a: s }}
+                          style={{
+                            width: '11rem',
+                            height: '5px',
+                            borderRadius: '10px',
+                          }}
+                          onChange={(color) => {
+                            updateS(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div className="Slider-table">
-                      <p>明度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, ${`rgb(0, 0, 0)`}, ${hsvaToRgbaString({ h: h * 360, s: s * 100, v: 50, a: 1 })}, ${`rgb(255, 255, 255)`})`}
-                        hsva={{ ...hsva, a: l }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateL(color.a);
-                        }}
-                      />
-                    </div>
+                      <div className="Slider-table">
+                        <p>明度</p>
+                        <Alpha
+                          className="SliderHue"
+                          background={`linear-gradient(to right, ${`rgb(0, 0, 0)`}, ${hsvaToRgbaString({ h: h * 360, s: s * 100, v: 50, a: 1 })}, ${`rgb(255, 255, 255)`})`}
+                          hsva={{ ...hsva, a: l }}
+                          style={{
+                            width: '11rem',
+                            height: '5px',
+                            borderRadius: '10px',
+                          }}
+                          onChange={(color) => {
+                            updateL(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div className="Slider-table">
-                      <p>金属度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: metal }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateMetal(color.a);
-                        }}
-                      />
-                    </div>
+                      <div className="Slider-table">
+                        <p>金属度</p>
+                        <Alpha
+                          className="SliderHue"
+                          background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
+                          hsva={{ ...hsva, a: metal }}
+                          style={{
+                            width: '11rem',
+                            height: '5px',
+                            borderRadius: '10px',
+                          }}
+                          onChange={(color) => {
+                            updateMetal(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div className="Slider-table">
-                      <p>粗糙度</p>
-                      <Alpha
-                        className="SliderHue"
-                        background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: rough }}
-                        style={{
-                          width: '11rem',
-                          height: '5px',
-                          borderRadius: '10px',
-                        }}
-                        onChange={(color) => {
-                          console.log('newShade', color);
-                          updateRough(color.a);
-                        }}
-                      />
+                      <div className="Slider-table">
+                        <p>粗糙度</p>
+                        <Alpha
+                          className="SliderHue"
+                          background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
+                          hsva={{ ...hsva, a: rough }}
+                          style={{
+                            width: '11rem',
+                            height: '5px',
+                            borderRadius: '10px',
+                          }}
+                          onChange={(color) => {
+                            updateRough(color.a);
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div> */}
-
-            <div
-              style={{
-                opacity: 1,
-                transform: 'translateY(-50%) rotate(-90deg)',
-                transformOrigin: 'center center',
-                position: 'absolute',
-                left: '5vmin',
-                top: '50%',
-                fontSize: '2.5vmin',
-              }}
-            >
+            ) : (
               <div
                 style={{
-                  position: 'relative',
+                  opacity: 1,
+                  transform: 'translateY(-50%) rotate(-90deg)',
+                  transformOrigin: 'center center',
+                  position: 'absolute',
+                  left: '5vmin',
+                  top: '50%',
+                  fontSize: '2.5vmin',
                 }}
               >
                 <div
                   style={{
-                    width: '100%',
-                    height: '100%',
+                    position: 'relative',
                   }}
                 >
                   <div
                     style={{
-                      width: '20rem',
-                      height: '16rem',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
+                      width: '100%',
+                      height: '100%',
                     }}
                   >
                     <div
                       style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'space-evenly',
+                        width: '20rem',
                         height: '16rem',
-                        width: '4rem',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
                       }}
-                      className={styles.hueWrapper}
                     >
-                      <p
+                      <div
                         style={{
-                          transform: 'rotate(90deg)',
-                          transformOrigin: 'center center',
-                          color: '#fff',
-                          width: '3rem',
-                          margin: '0px 1rem 2px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'space-evenly',
+                          height: '16rem',
+                          width: '4rem',
                         }}
+                        className={styles.hueWrapper}
                       >
-                        粗糙度
-                      </p>
-                      <Alpha
-                        direction="vertical"
-                        reverse={true}
-                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: rough }}
-                        // pointer={CustomPointer}
-                        style={{
-                          width: '5px',
-                          height: '11rem',
-                          borderRadius: '10px',
-                          backgroundPosition: 'left center',
-                          position: 'relative',
-                        }}
-                        radius="3px"
-                        onChange={(color) => {
-                          updateRough(color.a);
-                        }}
-                      />
-                    </div>
+                        <p
+                          style={{
+                            transform: 'rotate(90deg)',
+                            transformOrigin: 'center center',
+                            color: '#fff',
+                            width: '3rem',
+                            margin: '0px 1rem 2px',
+                          }}
+                        >
+                          粗糙度
+                        </p>
+                        <Alpha
+                          direction="vertical"
+                          reverse={true}
+                          background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
+                          hsva={{ ...hsva, a: rough }}
+                          style={{
+                            width: '5px',
+                            height: '11rem',
+                            borderRadius: '10px',
+                            position: 'relative',
+                          }}
+                          radius="3px"
+                          onChange={(color) => {
+                            updateRough(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'space-evenly',
-                        height: '16rem',
-                        width: '4rem',
-                      }}
-                      className={styles.hueWrapper}
-                    >
-                      <p
+                      <div
                         style={{
-                          transform: 'rotate(90deg)',
-                          transformOrigin: 'center center',
-                          color: '#fff',
-                          width: '3rem',
-                          margin: '0px 1rem 2px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'space-evenly',
+                          height: '16rem',
+                          width: '4rem',
                         }}
+                        className={styles.hueWrapper}
                       >
-                        金属度
-                      </p>
-                      <Alpha
-                        direction="vertical"
-                        reverse={true}
-                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: metal }}
-                        // pointer={CustomPointer}
-                        style={{
-                          width: '5px',
-                          height: '11rem',
-                          borderRadius: '10px',
-                          backgroundPosition: 'left center',
-                        }}
-                        radius="3px"
-                        onChange={(color) => {
-                          updateMetal(color.a);
-                        }}
-                      />
-                    </div>
+                        <p
+                          style={{
+                            transform: 'rotate(90deg)',
+                            transformOrigin: 'center center',
+                            color: '#fff',
+                            width: '3rem',
+                            margin: '0px 1rem 2px',
+                          }}
+                        >
+                          金属度
+                        </p>
+                        <Alpha
+                          direction="vertical"
+                          reverse={true}
+                          background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
+                          hsva={{ ...hsva, a: metal }}
+                          style={{
+                            width: '5px',
+                            height: '11rem',
+                            borderRadius: '10px',
+                          }}
+                          radius="3px"
+                          onChange={(color) => {
+                            updateMetal(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'space-evenly',
-                        height: '16rem',
-                        width: '4rem',
-                      }}
-                      className={styles.hueWrapper}
-                    >
-                      <p
+                      <div
                         style={{
-                          transform: 'rotate(90deg)',
-                          transformOrigin: 'center center',
-                          color: '#fff',
-                          width: '3rem',
-                          margin: '0px 1rem 2px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'space-evenly',
+                          height: '16rem',
+                          width: '4rem',
                         }}
+                        className={styles.hueWrapper}
                       >
-                        明度
-                      </p>
-                      <Alpha
-                        direction="vertical"
-                        reverse={true}
-                        background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
-                        hsva={{ ...hsva, a: l }}
-                        // pointer={CustomPointer}
-                        style={{
-                          width: '5px',
-                          height: '11rem',
-                          borderRadius: '10px',
-                          backgroundPosition: 'left center',
-                        }}
-                        radius="3px"
-                        onChange={(color) => {
-                          updateL(color.a);
-                        }}
-                      />
-                    </div>
+                        <p
+                          style={{
+                            transform: 'rotate(90deg)',
+                            transformOrigin: 'center center',
+                            color: '#fff',
+                            width: '3rem',
+                            margin: '0px 1rem 2px',
+                          }}
+                        >
+                          明度
+                        </p>
+                        <Alpha
+                          direction="vertical"
+                          reverse={true}
+                          background={`linear-gradient(to bottom, ${`rgb(0, 0, 0)`}, ${hsvaToRgbaString({ h: h * 360, s: s * 100, v: 50, a: 1 })}, ${`rgb(255, 255, 255)`})`}
+                          hsva={{ ...hsva, a: l }}
+                          style={{
+                            width: '5px',
+                            height: '11rem',
+                            borderRadius: '10px',
+                          }}
+                          radius="3px"
+                          onChange={(color) => {
+                            updateL(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'space-evenly',
-                        height: '16rem',
-                        width: '4rem',
-                      }}
-                      className={styles.hueWrapper}
-                    >
-                      <p
+                      <div
                         style={{
-                          transform: 'rotate(90deg)',
-                          transformOrigin: 'center center',
-                          color: '#fff',
-                          width: '3rem',
-                          margin: '0px 1rem 2px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'space-evenly',
+                          height: '16rem',
+                          width: '4rem',
                         }}
+                        className={styles.hueWrapper}
                       >
-                        饱和度
-                      </p>
-                      <Alpha
-                        direction="vertical"
-                        background={`linear-gradient(to bottom, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
-                        reverse={true}
-                        hsva={{ ...hsva, a: s }}
-                        // pointer={CustomPointer}
-                        style={{
-                          width: '5px',
-                          height: '11rem',
-                          borderRadius: '10px',
-                          backgroundPosition: 'left center',
-                        }}
-                        radius="3px"
-                        onChange={(color) => {
-                          updateS(color.a);
-                        }}
-                      />
-                    </div>
+                        <p
+                          style={{
+                            transform: 'rotate(90deg)',
+                            transformOrigin: 'center center',
+                            color: '#fff',
+                            width: '3rem',
+                            margin: '0px 1rem 2px',
+                          }}
+                        >
+                          饱和度
+                        </p>
+                        <Alpha
+                          direction="vertical"
+                          background={`linear-gradient(to bottom, ${hsvaToRgbaString({ ...hsva, s: 0 })}, ${hsvaToRgbaString({ ...hsva, s: 100 })})`}
+                          reverse={true}
+                          hsva={{ ...hsva, a: s }}
+                          style={{
+                            width: '5px',
+                            height: '11rem',
+                            borderRadius: '10px',
+                          }}
+                          radius="3px"
+                          onChange={(color) => {
+                            updateS(color.a);
+                          }}
+                        />
+                      </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'space-evenly',
-                        height: '16rem',
-                        width: '4rem',
-                      }}
-                      className={styles.hueWrapper}
-                    >
-                      <p
+                      <div
                         style={{
-                          transform: 'rotate(90deg)',
-                          transformOrigin: 'center center',
-                          color: '#fff',
-                          width: '3rem',
-                          margin: '0px 1rem 2px',
-                          pointerEvents: 'none',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'space-evenly',
+                          height: '16rem',
+                          width: '4rem',
                         }}
+                        className={styles.hueWrapper}
                       >
-                        色相
-                      </p>
-                      <Hue
-                        direction="vertical"
-                        reverse={true}
-                        hue={h * 360}
-                        // pointer={CustomPointer}
-                        style={{
-                          width: '5px',
-                          height: '11rem',
-                          borderRadius: '10px',
-                          backgroundPosition: 'left center',
-                          position: 'relative',
-                        }}
-                        radius="3px"
-                        onChange={(newHue) => {
-                          updateHue(newHue.h / 360);
-                        }}
-                      />
+                        <p
+                          style={{
+                            transform: 'rotate(90deg)',
+                            transformOrigin: 'center center',
+                            color: '#fff',
+                            width: '3rem',
+                            margin: '0px 1rem 2px',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          色相
+                        </p>
+                        <Hue
+                          direction="vertical"
+                          reverse={true}
+                          hue={h * 360}
+                          style={{
+                            width: '5px',
+                            height: '11rem',
+                            borderRadius: '10px',
+                            position: 'relative',
+                          }}
+                          radius="3px"
+                          onChange={(newHue) => {
+                            updateHue(newHue.h / 360);
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* 截图按钮 */}

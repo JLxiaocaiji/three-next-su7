@@ -51,7 +51,6 @@ const _A = (t: number, n: number, r: number) => {
   return ((t = Math.max(n, t)), (t = Math.min(r, t)), t);
 };
 
-// CameraController（相机控制器）
 export class CameraManager {
   private enableClamp = true;
   public targetFov = 45;
@@ -88,14 +87,14 @@ export class CameraManager {
   // 控制模式
   private controlMode: 'spring' | 'orbit' = 'spring';
 
-  private _tempVec21 = new THREE.Vector2(); // $u
-  private _tempVec22 = new THREE.Vector2(); // $u
+  private _tempVec21 = new THREE.Vector2();
+  private _tempVec22 = new THREE.Vector2();
 
-  private _tempEuler1 = new THREE.Euler(0, 0, 0); // Ev
-  private _tempEuler2 = new THREE.Euler(0, 0, 0); // CO
+  private _tempEuler1 = new THREE.Euler(0, 0, 0);
+  private _tempEuler2 = new THREE.Euler(0, 0, 0);
 
-  private _tempQuat1 = new THREE.Quaternion(); // Bd
-  private _tempQuat2 = new THREE.Quaternion(); // xA
+  private _tempQuat1 = new THREE.Quaternion();
+  private _tempQuat2 = new THREE.Quaternion();
 
   constructor(springCamera: SpringCamera, dom: HTMLCanvasElement, camera: THREE.PerspectiveCamera) {
     this.dom = dom;
@@ -108,7 +107,6 @@ export class CameraManager {
     this.orbitControls.enabled = false;
 
     this.reset();
-    // this.bindEvents();
   }
 
   get lerpLengthStrength() {
@@ -335,13 +333,10 @@ export class CameraManager {
       delta * this._lerpLengthStrength
     );
 
-    // TO(this._deltaRotation, Ev, r * 10),
     TO(this._deltaRotation, this._tempEuler1, delta * 10);
 
-    // EO(this._deltaRotation, Ev),
     EO(this._deltaRotation, this._tempEuler1);
 
-    // MO(this._targetRotation, Ev)
     MO(this._targetRotation, this._tempEuler1);
 
     this._tempQuat1.setFromEuler(this._targetRotation);
@@ -375,7 +370,7 @@ export class CameraManager {
     springLength: number,
     rotation: THREE.Euler,
     duration: number = 1.5,
-    switchToOrbitAfter: boolean = true, // 动画完成后是否切换到OrbitControls
+    switchToOrbitAfter: boolean = true, // 切换到OrbitControls
     easing: string = 'power2.inOut',
     delay: number = 0
   ) {
@@ -457,7 +452,6 @@ export class CameraManager {
         // 平滑插值弹簧长度
         this._springCamera.springLength = THREE.MathUtils.lerp(startLength, springLength, t);
 
-        // 四元数球面插值（slerp）旋转，避免万向节死锁或多圈旋转突变
         this._tempQuat1.copy(startQuat).slerp(endQuat, t);
         this._springCamera.rotation.setFromQuaternion(this._tempQuat1, 'YZX');
       },
@@ -486,9 +480,8 @@ export class CameraManager {
   }
 
   private scrollForward(isForward: boolean) {
-    // 入口条件：不在点击效果中 且 未处于状态切换中
+    // 不在点击效果中 且 未处于状态切换中
     if (!this.isInClickEffect && !this.isTransitioning) {
-      // 立即上锁，防止重复触发
       this.isTransitioning = true;
 
       gsap
