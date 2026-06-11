@@ -182,7 +182,6 @@ export class SceneManager {
     });
     this.renderer.setSize(this.sizes.width, this.sizes.height);
     this.renderer.setPixelRatio(this.sizes.pixelRatio);
-    this.renderer.setClearColor(new THREE.Color('#ffffff'));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -280,7 +279,14 @@ export class SceneManager {
     const updatePercent = () => {
       const allLoaded = modelLoaded + materialLoaded;
       percent = Math.floor((allLoaded / total) * 100);
+
       eventBus.emit('LoadingProgress', { progress: percent });
+      if (percent !== 100) {
+        return;
+      } else {
+        this.renderer.compile(this.scene, this.camera);
+        this.startRender();
+      }
     };
 
     try {
