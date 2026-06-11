@@ -281,17 +281,6 @@ export class SceneManager {
       percent = Math.floor((allLoaded / total) * 100);
 
       eventBus.emit('LoadingProgress', { progress: percent });
-      if (percent !== 100) {
-        return;
-      } else {
-        this.renderer.compile(this.scene, this.camera);
-
-        setTimeout(() => {
-          // 预渲染第一帧
-          this.renderer.render(this.scene, this.camera);
-          this.startRender();
-        }, 50);
-      }
     };
 
     try {
@@ -318,6 +307,17 @@ export class SceneManager {
       await this.prepareScene();
       await this.createScene();
       this.compileScene();
+
+      this.renderer.compile(this.scene, this.camera);
+      if (this.composer) {
+        this.composer.render();
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
+
+      setTimeout(() => {
+        this.startRender();
+      }, 60);
     }
   }
 
