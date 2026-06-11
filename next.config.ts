@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['three'],
 
+  compiler: {
+    // 保留 warn/error
+    removeConsole: { exclude: ['warn', 'error'] },
+  },
+
   // allowedDevOrigins: ['10.50.9.24'],
 
   webpack: (config, { dev, isServer }) => {
