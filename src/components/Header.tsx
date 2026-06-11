@@ -121,7 +121,7 @@ export default function Header({ currentModule }: { currentModule: number }) {
         <div
           className="Mute-content"
           onClick={() => {
-            setPlayBgm(!isPlayingBgm);
+            setPlayBgm();
           }}
         >
           <img src={isPlayingBgm ? '/icon/open.webp' : '/icon/mute.webp'} alt="" />

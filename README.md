@@ -6,4 +6,4 @@
 
 技术栈：Next.js+ TypeScript + React + Three.js + Prisma
 
-<img src="public/icon/gugugaga.gif" alt="演示动图" width="50">
+<img src="public/icon/gugugaga.gif" alt="演示动图" width="50"> 

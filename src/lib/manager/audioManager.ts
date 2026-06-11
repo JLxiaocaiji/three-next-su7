@@ -114,7 +114,7 @@ export class AudioManager {
     }
 
     // 停止当前背景音乐
-    this.stopBackgroundMusic();
+    // this.stopBackgroundMusic();
 
     if (!this.audioCache.has(key)) {
       console.log(`音频 ${key} 未加载，等待中...`);
@@ -160,10 +160,16 @@ export class AudioManager {
     const bgm = this.backgroundMusics.get(key);
     if (!bgm) return;
 
-    gsap.to(bgm, {
-      volume: 0,
+    const volumeProxy = {
+      value: bgm.getVolume()
+    };
+    gsap.to(volumeProxy, {
+      value: 0,
       duration,
       ease: 'power1.inOut',
+      onUpdate: () => {
+      bgm.setVolume(volumeProxy.value);
+    },
       onComplete: () => this.stopBackgroundMusic(key),
     });
   }

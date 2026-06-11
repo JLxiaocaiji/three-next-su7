@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+// import { persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
 import { eventBus } from '@/utils/eventBus';
@@ -13,7 +13,7 @@ interface State {
 }
 
 export const useAudioStore = create<State>()(
-  persist(
+  // persist(
     immer((set) => ({
       isPlayingBgm: false,
 
@@ -30,8 +30,5 @@ export const useAudioStore = create<State>()(
           //   state.isPlayChooseMusic = isPlayChooseMusic;
         }),
     })),
-    {
-      name: 'audio-store',
-    }
-  )
+  // )
 );
