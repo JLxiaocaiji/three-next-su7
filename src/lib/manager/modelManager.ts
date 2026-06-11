@@ -624,7 +624,7 @@ export class ModelManager {
         }
 
         // 添加 uv2
-        let geometry = node.geometry;
+        const geometry = node.geometry;
         if (!geometry.attributes.uv2) {
           // 优先使用uv1，如果没有uv1则使用uv
           const sourceUV = geometry.attributes.uv1 || geometry.attributes.uv;

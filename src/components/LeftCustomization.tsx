@@ -29,7 +29,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
   // 色相
   const colorList = useColorStore((state) => state.colorList);
   const customColor = colorList.get('custom')!;
-  const { h, s, l } = customColor.hsl;
+  const { h, s, l } = customColor.hsl!;
   const { metal, rough } = customColor;
   const updateHue = useColorStore((state) => state.updateHue);
   const updateL = useColorStore((state) => state.updateL);

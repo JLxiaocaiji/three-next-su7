@@ -518,7 +518,7 @@ export class SceneManager {
     const model = this.modelManager.getCache('sm_simpleCar' as CacheKey);
 
     if (!model) return;
-    let tempMaterial = model.userData.meshData.materials.m_simpleCar as THREE.MeshMatcapMaterial;
+    const tempMaterial = model.userData.meshData.materials.m_simpleCar as THREE.MeshMatcapMaterial;
     tempMaterial.matcap = sceneConfig.ut_scar_matcap.value;
     tempMaterial.needsUpdate = true;
 

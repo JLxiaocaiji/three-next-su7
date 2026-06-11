@@ -344,7 +344,7 @@ class SceneConfig {
 
     if (currentColorIndex === 'custom') {
       // 自定义颜色编码
-      let customColor = this.colors.get('custom')!;
+      const customColor = this.colors.get('custom')!;
       let roughHex = customColor && Math.round((customColor.rough ?? 0) * 255).toString(16);
       roughHex = roughHex.padStart(2, '0');
 

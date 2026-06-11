@@ -897,7 +897,7 @@ export class MaterialManager {
   }
 
   public initSpeedupMaterial(meshData: ModelMeshData): void {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       uniforms: {
         time: this.global_time_uniforms.u_speedTime, // 时间
         vSpeed: this.u_speedUpBackgroundValue, // 光效强度
@@ -979,7 +979,7 @@ export class MaterialManager {
 
   // 曲率
   public initCurvatureMaterial(meshData: ModelMeshData) {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       name: 'm_curvature',
 
       uniforms: {
@@ -1036,7 +1036,7 @@ export class MaterialManager {
 
   // 风动线
   public initWindspeedMaterial(meshData: ModelMeshData): void {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       name: 'm_windLine',
 
       uniforms: {
@@ -1120,7 +1120,7 @@ export class MaterialManager {
   }
 
   public initLinecarMaterial(meshData: ModelMeshData): void {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       name: 'm_linecar',
 
       uniforms: {
@@ -1191,7 +1191,7 @@ export class MaterialManager {
 
   // 车雷达
   public initCarradarMaterial(meshData: ModelMeshData): void {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       name: 'm_carradar',
 
       uniforms: {
@@ -1275,7 +1275,7 @@ export class MaterialManager {
 
   // sm_simpleCar
   public initSimpleCarMaterial(meshData: ModelMeshData): void {
-    let tempMatcapMaterial = new THREE.MeshMatcapMaterial({
+    const tempMatcapMaterial = new THREE.MeshMatcapMaterial({
       transparent: true,
       blending: THREE.AdditiveBlending,
     });
@@ -1376,7 +1376,7 @@ export class MaterialManager {
 
   // 雷达点着色器材质
   public getRadarPointMaterial(): THREE.ShaderMaterial {
-    let material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       name: 'm_radarPoints',
       uniforms: {
         time: this.global_time_uniforms.u_time,

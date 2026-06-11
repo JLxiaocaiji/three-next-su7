@@ -241,7 +241,7 @@ export class CameraManager {
     console.log('mouse move');
     this._tempVec21.set(e.pageX, e.pageY);
     if (this._button === 0) {
-      let delta = this._preLoc0
+      const delta = this._preLoc0
         .clone()
         .sub(this._tempVec21)
         .multiplyScalar(this._springCamera.springLength * 0.001);
@@ -288,7 +288,7 @@ export class CameraManager {
     if (e.touches.length !== 1 || e.touches[0].identifier !== this._touchID) return;
     const t = e.touches[0];
     this._tempVec22.set(t.pageX, t.pageY);
-    let delta = this._preLoc0
+    const delta = this._preLoc0
       .clone()
       .sub(this._tempVec22)
       .multiplyScalar(this._springCamera.springLength * 0.0016);

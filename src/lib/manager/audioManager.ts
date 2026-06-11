@@ -79,7 +79,7 @@ export class AudioManager {
   private init() {
     this.listener = new THREE.AudioListener();
 
-    for (let item of this.audioList) {
+    for (const item of this.audioList) {
       this.loadAudio(item.key, item.url);
     }
   }

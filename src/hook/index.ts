@@ -28,8 +28,8 @@ export const useIsSwapWidthAndHeight = () => {
     const swap = checkIsNeedSwap();
     setIsSwap(swap);
 
-    let w = window.innerWidth;
-    let h = window.innerHeight;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
 
     setIsMobile(w < 645 ? true : false);
     setViewWidth(w);
