@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 
 import { SceneManager } from '@/lib/manager/sceneManager';
 
-import { useIsSwapWidthAndHeight } from '@/hook/index';
+import { useIsSwapWidthAndHeight, checkIsNeedSwap } from '@/hook/index';
 import { debounce } from '@/utils/index';
 
 import { useStore, cleanupAllStores } from '@/store/index';
@@ -14,10 +14,11 @@ export default function ModelPage({}: {}) {
   const containerRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
 
-  const { isSwap, viewWidth, viewHeight } = useIsSwapWidthAndHeight();
+  const { isSwap, viewWidth, viewHeight, isMobile } = useIsSwapWidthAndHeight();
 
   const setStoreSwap = useStore((state) => state.setStoreSwap);
   const setProgress = useStore((state) => state.setProgress);
+  const setIsMobile = useStore((state) => state.setIsMobile);
 
   // 监听窗口大小变化
   useEffect(() => {
@@ -27,12 +28,14 @@ export default function ModelPage({}: {}) {
       setStoreSwap(w > h);
       if (w <= 0 || h <= 0) return;
       sceneRef.current?.resize(w, h, swap);
+
+      setIsMobile(isMobile);
     }, 100);
 
     const w = isSwap ? viewHeight : viewWidth;
     const h = isSwap ? viewWidth : viewHeight;
     handleResize(w, h, isSwap);
-  }, [isSwap, viewWidth, viewHeight, setStoreSwap]);
+  }, [isSwap, viewWidth, viewHeight, setStoreSwap, setIsMobile]);
 
   // sceneManager
   useEffect(() => {

@@ -11,17 +11,18 @@ export const useTap = <T = void>(onTap: (data: T) => void) => {
   );
 };
 
+export const checkIsNeedSwap = () => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const isMobile = /Mobile|Android|iPhone|iPod|iPad|Android(?!.*Mobile)/i.test(ua);
+  return isMobile || window.innerWidth < 645;
+};
+
 export const useIsSwapWidthAndHeight = () => {
   const [isSwap, setIsSwap] = useState(false);
   const [viewWidth, setViewWidth] = useState(0);
   const [viewHeight, setViewHeight] = useState(0);
-
-  const checkIsNeedSwap = () => {
-    if (typeof window === 'undefined') return false;
-    const ua = navigator.userAgent;
-    const isMobile = /Mobile|Android|iPhone|iPod|iPad|Android(?!.*Mobile)/i.test(ua);
-    return isMobile || window.innerWidth < 645;
-  };
+  const [isMobile, setIsMobile] = useState(false);
 
   const update = () => {
     const swap = checkIsNeedSwap();
@@ -30,6 +31,7 @@ export const useIsSwapWidthAndHeight = () => {
     let w = window.innerWidth;
     let h = window.innerHeight;
 
+    setIsMobile(w < 645 ? true : false);
     setViewWidth(w);
     setViewHeight(h);
   };
@@ -44,5 +46,5 @@ export const useIsSwapWidthAndHeight = () => {
     };
   }, []);
 
-  return { isSwap, viewWidth, viewHeight };
+  return { isSwap, viewWidth, viewHeight, isMobile };
 };

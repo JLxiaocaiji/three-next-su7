@@ -1,46 +1,9 @@
-import { Howl } from 'howler';
+import * as THREE from 'three';
 import gsap from 'gsap';
 
+import { sceneConfig } from './constantsConfig';
+
 // https://threejs.org/examples/?q=box#webaudio_sandbox
-
-/**
- * Vercel Blob 音乐上传
-
-创建 Vercel Blob 存储
-登录 Vercel 控制台
-进入你的项目 → 点击 Storage 标签
-点击 Create Database → 选择 Blob
-选择离你最近的区域 → 点击 Create
-Vercel 会自动为你添加 BLOB_READ_WRITE_TOKEN 环境变量
-
-拉取环境变量到本地
-bash 运行
-vercel env pull .env.local
-
-实现文件删除功能
-限制单个用户的上传数量和总容量
-添加文件病毒扫描（使用第三方服务）
-对上传的文件进行重命名，避免路径遍历攻击
-
-1. 永远不要在客户端暴露 BLOB_READ_WRITE_TOKEN
-这个令牌拥有完全的读写权限，泄露会导致严重的安全问题
-始终使用 generateClientTokenFromReadWriteToken 生成临时的、权限受限的客户端令牌
-客户端令牌可以限制：文件前缀、有效期、允许的文件类型、最大文件大小
-2. 生产环境中不要在客户端直接使用 list() 方法
-list() 方法需要读写令牌
-应该通过服务器端 API 路由来获取文件列表，这样可以：
-添加用户认证
-过滤用户只能看到自己上传的文件
-实现分页和搜索功能
-3. 添加用户认证
-在生产环境中，务必添加用户认证（如 NextAuth.js）
-只有登录用户才能上传和删除文件
-每个用户只能管理自己上传的文件
-
-生产环境优化:
-前端和后端部署在不同的域名，需要在 Vercel Blob 控制台配置 CORS 规则
-Vercel Blob 默认缓存文件 1 个月，在上传时自定义缓存时间
- */
 
 // 定义状态枚举
 enum InteractionState {
@@ -49,103 +12,480 @@ enum InteractionState {
   SCAN = 'State3',
 }
 
+interface AudioConfig {
+  volume?: number; // 音量
+  loop?: boolean; // 是否循环播放
+  autoplay?: boolean; // 是否自动播放
+  distanceModel?: 'linear' | 'inverse' | 'exponential'; // 衰减模式
+  refDistance?: number; // 衰减参考距离
+  maxDistance?: number; // 衰减最大距离
+  rolloffFactor?: number; // 衰减因子
+}
+
+interface AudioPlayConfig extends AudioConfig {
+  fadeIn?: number; // 淡入时长（秒）
+  fadeOut?: number; // 淡出时长（秒）
+  stopPrevious?: boolean; // 播放前是否停止同类型所有音频
+}
+
+// 位置音频
+interface PositionalAudioConfig extends AudioConfig {
+  position?: THREE.Vector3;
+  object?: THREE.Object3D;
+}
+
+interface PositionalAudioPlayConfig {
+  position?: THREE.Vector3;
+  fadeIn?: number;
+  volume?: number;
+}
+
 export class AudioManager {
-  private sound: Howl;
-  private beatID: number = -1;
-  private bubuID: number = -1;
-  private scanID: number = -1;
-  private isScanning: boolean = false;
+  private static instance: AudioManager;
+  private audioContext: AudioContext | null = null;
+  private listener: THREE.AudioListener | null = null;
+  private audioLoader: THREE.AudioLoader;
+  private audioCache: Map<string, AudioBuffer>;
+  private backgroundMusic: THREE.Audio | null = null; // 背景音乐
+  private backgroundMusics: Map<string, THREE.Audio>;
+  private positionalAudio: THREE.PositionalAudio | null = null; // 3D空间音频
+  private positionalAudios: Map<string, THREE.PositionalAudio>;
+  private playingAudios: Set<THREE.Audio | THREE.PositionalAudio>;
+  private audioList: Array<{ key: string; url: string }>;
+
+  private bgmPlaylist: string[] = []; // bgm列表
+  private currentBgmIndex: number = 0; // 当前播放的背景音乐索引
+  private isPlaylistMode: boolean = false; // 是否处于列表播放模式
+  private currentPlaylistBgmKey: string | null = null; // 当前播放列表BGM
 
   constructor() {
+    this.audioLoader = new THREE.AudioLoader();
+    this.audioCache = new Map();
+    this.backgroundMusics = new Map();
+    this.positionalAudios = new Map();
+    this.playingAudios = new Set();
+    this.audioList = sceneConfig.audioList;
+    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.init();
   }
 
+  public static getInstance(): AudioManager {
+    if (!AudioManager.instance) {
+      AudioManager.instance = new AudioManager();
+    }
+    return AudioManager.instance;
+  }
+
   private init() {
-    // 1. 初始化音频精灵
-    this.sound = new Howl({
-      src: ['res/audios/bgm2.mp3'],
-      sprite: {
-        melody: [0, 14534, true],
-        beat: [14535, 10900, true],
-        click: [25500, 370],
-        scan0: [26000, 734, true],
-        scan1: [26867, 734],
-        ka: [27700, 367],
-        bubu: [28200, 1300, true],
-        boom: [30000, 2000], // 假设补全
-      },
+    this.listener = new THREE.AudioListener();
+
+    for (let item of this.audioList) {
+      this.loadAudio(item.key, item.url);
+    }
+  }
+
+  public async loadAudio(key: string, url: string): Promise<void> {
+    if (this.audioCache.has(key)) {
+      return;
+    }
+
+    try {
+      const buffer = await this.audioLoader.loadAsync(url);
+      this.audioCache.set(key, buffer);
+      console.log(`Audio loaded: ${key}`);
+    } catch (error) {
+      console.error(`Failed to load audio: ${key}`, error);
+    }
+  }
+
+  public async playBGM(key: string, config: AudioPlayConfig = {}): Promise<void> {
+    if (!this.audioContext || !this.listener) {
+      console.warn('AudioManager not initialized');
+      return;
+    }
+
+    // 可选：停止所有之前的背景音乐
+    if (config.stopPrevious) {
+      this.stopAllBackgroundMusic({ fadeOut: config.fadeOut ?? 1 });
+    }
+
+    if (this.backgroundMusics.has(key)) {
+      this.stopBackgroundMusic(key, { fadeOut: 0.1 });
+    }
+
+    // 停止当前背景音乐
+    this.stopBackgroundMusic();
+
+    if (!this.audioCache.has(key)) {
+      console.log(`音频 ${key} 未加载，等待中...`);
+      const audioItem = this.audioList.find((item) => item.key === key);
+      if (!audioItem) {
+        console.error(`未找到音频配置: ${key}`);
+        return;
+      }
+      await this.loadAudio(key, audioItem.url);
+    }
+
+    const buffer = this.audioCache.get(key)!;
+    const bgm = new THREE.Audio(this.listener);
+    bgm.setBuffer(buffer);
+    bgm.setLoop(config.loop ?? true);
+
+    const targetVolume = config.volume ?? 0.5;
+    bgm.setVolume(config.fadeIn ? 0 : targetVolume);
+
+    if (config.autoplay ?? true) {
+      bgm.play();
+      this.playingAudios.add(bgm);
+      this.backgroundMusics.set(key, bgm);
+
+      // GSAP 淡入动画
+      if (config.fadeIn && config.fadeIn > 0) {
+        gsap.to(bgm, {
+          volume: targetVolume,
+          duration: config.fadeIn,
+          ease: 'power1.inOut',
+        });
+      }
+    }
+
+    bgm.onEnded = () => {
+      this.playingAudios.delete(bgm);
+      this.backgroundMusics.delete(key);
+      bgm.disconnect();
+    };
+  }
+
+  public fadeOutBGM(key: string, duration: number = 1): void {
+    const bgm = this.backgroundMusics.get(key);
+    if (!bgm) return;
+
+    gsap.to(bgm, {
+      volume: 0,
+      duration,
+      ease: 'power1.inOut',
+      onComplete: () => this.stopBackgroundMusic(key),
     });
   }
 
-  // 播放背景 BGM 组合
-  public playBGM() {
-    this.sound.play('melody');
-    this.beatID = this.sound.play('beat');
-    this.bubuID = this.sound.play('bubu');
+  public get isPlaying() {
+    return this.backgroundMusic;
+  }
 
-    // 初始时将 bubu 层静音
-    this.sound.volume(0, this.bubuID);
+  public playBgmPlaylist(keys: string[], config: AudioConfig = {}): void {
+    if (keys.length === 0) return;
+
+    this.bgmPlaylist = keys;
+    this.currentBgmIndex = 0;
+    this.isPlaylistMode = true;
+
+    // 播放第一首
+    this.playBgmFromPlaylist(config);
+  }
+
+  public nextBgm(config: AudioConfig = {}): void {
+    if (!this.isPlaylistMode || this.bgmPlaylist.length === 0) return;
+
+    this.currentBgmIndex = (this.currentBgmIndex + 1) % this.bgmPlaylist.length;
+    this.playBgmFromPlaylist(config);
+  }
+
+  public prevBgm(config: AudioConfig = {}): void {
+    if (!this.isPlaylistMode || this.bgmPlaylist.length === 0) return;
+
+    this.currentBgmIndex =
+      (this.currentBgmIndex - 1 + this.bgmPlaylist.length) % this.bgmPlaylist.length;
+    this.playBgmFromPlaylist(config);
   }
 
   /**
-   * 处理交互状态改变 (核心逻辑还原)
-   * @param isPressed 是否按下
-   * @param state 当前交互状态
+   * 从播放列表中播放当前索引的背景音乐
    */
-  public onStateChanged(isPressed: boolean, state: InteractionState) {
-    // 清理当前所有音量的补间动画，防止冲突
-    gsap.killTweensOf(this.sound);
+  private playBgmFromPlaylist(config: AudioPlayConfig = {}): void {
+    const key = this.bgmPlaylist[this.currentBgmIndex];
 
-    switch (state) {
-      case InteractionState.DYNAMICS:
-        this.handleDynamicsState(isPressed);
-        break;
-      case InteractionState.ACTION:
-        this.handleActionState(isPressed);
-        break;
-      case InteractionState.SCAN:
-        this.handleScanState(isPressed);
-        break;
+    // 停止当前音乐
+    if (this.currentPlaylistBgmKey) {
+      this.stopBackgroundMusic(this.currentPlaylistBgmKey, { fadeOut: config.fadeOut ?? 1 });
+    }
+
+    // 播放新音乐
+    const buffer = this.audioCache.get(key);
+    if (!buffer) {
+      console.error(`Audio not found in playlist: ${key}`);
+      this.nextBgm(config);
+      return;
+    }
+
+    const bgm = new THREE.Audio(this.listener!);
+    bgm.setBuffer(buffer);
+    bgm.setLoop(false);
+
+    const targetVolume = config.volume ?? 0.3;
+    bgm.setVolume(config.fadeIn ? 0 : targetVolume);
+
+    bgm.play();
+    this.playingAudios.add(bgm);
+    this.backgroundMusics.set(key, bgm);
+    this.currentPlaylistBgmKey = key;
+
+    // 淡入当前曲
+    if (config.fadeIn && config.fadeIn > 0) {
+      gsap.to(bgm, {
+        volume: targetVolume,
+        duration: config.fadeIn,
+        ease: 'power1.inOut',
+      });
+    }
+
+    // 自动播放下一首
+    bgm.onEnded = () => {
+      this.playingAudios.delete(bgm);
+      this.backgroundMusics.delete(key);
+      bgm.disconnect();
+      this.nextBgm(config);
+    };
+  }
+
+  // 停止播放列表模式
+  public stopPlaylistMode(options: { fadeOut?: number } = {}): void {
+    this.isPlaylistMode = false;
+    this.bgmPlaylist = [];
+    this.currentBgmIndex = 0;
+    if (this.currentPlaylistBgmKey) {
+      this.stopBackgroundMusic(this.currentPlaylistBgmKey, options);
+      this.currentPlaylistBgmKey = null;
     }
   }
 
-  private handleDynamicsState(isPressed: boolean) {
-    if (isPressed) {
-      // 延时 1 秒淡入 bubu 环境音
-      gsap.delayedCall(1, () => {
-        this.sound.fade(this.sound.volume(this.bubuID), 0.8, 1000, this.bubuID);
-      });
-      // 节奏层降温
-      this.sound.fade(this.sound.volume(this.beatID), 0.3, 1000, this.beatID);
+  /**
+   * 停止全局背景音乐
+   */
+  public stopBackgroundMusic(key?: string, options: { fadeOut?: number } = {}): void {
+    if (key) {
+      const bgm = this.backgroundMusics.get(key);
+      if (bgm) {
+        if (options.fadeOut && options.fadeOut > 0) {
+          this.fadeOutBGM(key, options.fadeOut);
+          return;
+        }
+        bgm.stop();
+        this.playingAudios.delete(bgm);
+        this.backgroundMusics.delete(key);
+        bgm.disconnect();
+      }
     } else {
-      // 恢复常规 BGM 状态
-      this.sound.fade(this.sound.volume(this.beatID), 1.0, 1000, this.beatID);
-      this.sound.fade(this.sound.volume(this.bubuID), 0.0, 1000, this.bubuID);
+      this.stopAllBackgroundMusic(options);
     }
   }
 
-  private handleActionState(isPressed: boolean) {
-    if (isPressed) {
-      // 延时 0.3 秒播放特定的冲击音
-      gsap.delayedCall(0.3, () => this.sound.play('boom'));
-    }
+  public stopAllBackgroundMusic(options: { fadeOut?: number } = {}): void {
+    this.backgroundMusics.forEach((_, key) => {
+      this.stopBackgroundMusic(key, options);
+    });
   }
 
-  private handleScanState(isPressed: boolean) {
-    if (isPressed) {
-      gsap.delayedCall(0.3, () => {
-        this.scanID = this.sound.play('scan0');
-        this.isScanning = true;
+  /**
+   * 创建3D空间音频
+   * @param key 音频缓存键名
+   * @param config 空间音频配置
+   * @returns 创建的空间音频实例
+   */
+  public createPositionalAudio(
+    key: string,
+    config: PositionalAudioConfig = {}
+  ): THREE.PositionalAudio | null {
+    if (!this.audioContext || !this.listener) {
+      console.warn('AudioManager not initialized');
+      return null;
+    }
+
+    const buffer = this.audioCache.get(key);
+    if (!buffer) {
+      console.error(`Audio not found: ${key}`);
+      return null;
+    }
+
+    // 创建空间音频
+    const positionalAudio = new THREE.PositionalAudio(this.listener);
+    positionalAudio.setBuffer(buffer);
+    positionalAudio.setVolume(config.volume ?? 1.0);
+    positionalAudio.setLoop(config.loop ?? false);
+
+    // 设置距离衰减模型
+    positionalAudio.setDistanceModel(config.distanceModel ?? 'inverse');
+    positionalAudio.setRefDistance(config.refDistance ?? 1.0);
+    positionalAudio.setMaxDistance(config.maxDistance ?? 100.0);
+    positionalAudio.setRolloffFactor(config.rolloffFactor ?? 1.0);
+
+    // 设置位置
+    if (config.position) positionalAudio.position.copy(config.position);
+    if (config.object) config.object.add(positionalAudio);
+
+    this.positionalAudios.set(key, positionalAudio);
+    return positionalAudio;
+  }
+
+  /**
+   * 播放3D空间音频
+   */
+  public playPositionalAudio(key: string, options: PositionalAudioPlayConfig = {}): void {
+    const audio = this.positionalAudios.get(key);
+    if (!audio) {
+      console.error(`Positional audio not found: ${key}`);
+      return;
+    }
+
+    if (audio.isPlaying) {
+      this.stopPositionalAudio(key, { fadeOut: 0.1 });
+    }
+
+    if (options.position) audio.position.copy(options.position);
+
+    const targetVolume = options.volume ?? audio.getVolume();
+    audio.setVolume(options.fadeIn ? 0 : targetVolume);
+
+    audio.play();
+    this.playingAudios.add(audio);
+
+    // 淡入动画
+    if (options.fadeIn && options.fadeIn > 0) {
+      gsap.to(audio, {
+        volume: targetVolume,
+        duration: options.fadeIn,
+        ease: 'power1.inOut',
       });
-    } else if (this.isScanning) {
-      this.isScanning = false;
-      this.sound.stop(this.scanID);
-      this.sound.play('scan1'); // 播放扫描结束音
+    }
+
+    audio.onEnded = () => {
+      this.playingAudios.delete(audio);
+    };
+  }
+
+  /**
+   * 停止指定的3D空间音频
+   * @param key 音频缓存键名
+   */
+  public stopPositionalAudio(key: string, options: { fadeOut?: number } = {}): void {
+    const audio = this.positionalAudios.get(key);
+    if (audio && audio.isPlaying) {
+      if (options.fadeOut && options.fadeOut > 0) {
+        gsap.to(audio, {
+          volume: 0,
+          duration: options.fadeOut,
+          ease: 'power1.inOut',
+          onComplete: () => {
+            audio.stop();
+            this.playingAudios.delete(audio);
+            audio.setVolume(1.0); // 重置音量
+          },
+        });
+        return;
+      }
+      audio.stop();
+      this.playingAudios.delete(audio);
     }
   }
 
-  public destroy() {
-    this.sound.stop();
-    this.sound.unload();
+  /**
+   * 播放一次性交互音频（非空间）
+   * @param key 音频缓存键名
+   * @param volume 音量
+   */
+  public playTempSound(
+    key: string,
+    options: { volume?: number; fadeIn?: number; fadeOut?: number } = {}
+  ): void {
+    if (!this.audioContext || !this.listener) {
+      console.warn('AudioManager not initialized');
+      return;
+    }
+
+    const buffer = this.audioCache.get(key);
+    if (!buffer) {
+      console.error(`Audio not found: ${key}`);
+      return;
+    }
+
+    // 创建临时音频实例
+    const sound = new THREE.Audio(this.listener);
+    sound.setBuffer(buffer);
+    sound.setVolume(options.fadeIn ? 0 : (options.volume ?? 0.5));
+    sound.setLoop(false);
+
+    sound.play();
+    this.playingAudios.add(sound);
+
+    if (options.fadeIn && options.fadeIn > 0) {
+      gsap.to(sound, {
+        volume: options.volume ?? 0.5,
+        duration: options.fadeIn,
+        ease: 'power1.inOut',
+      });
+    }
+
+    // 播放结束后自动清理
+    sound.onEnded = () => {
+      if (options.fadeOut && options.fadeOut > 0) {
+        gsap.to(sound, {
+          volume: 0,
+          duration: options.fadeOut,
+          ease: 'power1.inOut',
+          onComplete: () => {
+            this.playingAudios.delete(sound);
+            sound.disconnect();
+          },
+        });
+      } else {
+        this.playingAudios.delete(sound);
+        sound.disconnect();
+      }
+    };
+  }
+
+  public stopAll(options: { fadeOut?: number } = {}): void {
+    this.stopAllBackgroundMusic(options);
+
+    this.positionalAudios.forEach((_, key) => {
+      this.stopPositionalAudio(key, options);
+    });
+
+    this.playingAudios.forEach((audio) => {
+      if (options.fadeOut && options.fadeOut > 0) {
+        gsap.to(audio, {
+          volume: 0,
+          duration: options.fadeOut,
+          ease: 'power1.inOut',
+          onComplete: () => {
+            audio.stop();
+            audio.disconnect();
+          },
+        });
+      } else {
+        audio.stop();
+        audio.disconnect();
+      }
+    });
+
+    this.playingAudios.clear();
+  }
+
+  public dispose(): void {
+    this.stopAll();
+
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    if (this.listener) {
+      this.listener = null;
+    }
+
+    this.listener = null;
+    this.audioCache.clear();
+    this.positionalAudios.clear();
+    this.backgroundMusics.clear();
+    AudioManager.instance = null as any;
   }
 }

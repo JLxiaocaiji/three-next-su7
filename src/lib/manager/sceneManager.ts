@@ -23,6 +23,7 @@ import { CarMotionManager } from './carMotionManager';
 import { sceneConfig } from './constantsConfig';
 import { isSupportMSAA } from '@/utils/index';
 import { MipBlurPass } from '@/classes/MipBlurPass';
+import { AudioManager } from './audioManager';
 
 import { eventBus } from '@/utils/eventBus';
 import { CacheKey } from '@/types/index';
@@ -63,8 +64,9 @@ interface CustomColor {
  */
 export class SceneManager {
   public static instance: SceneManager | null = null;
-  public readonly modelManager: ModelManager;
-  public readonly materialManager: MaterialManager;
+  public modelManager: ModelManager;
+  public materialManager: MaterialManager;
+  public audioManager: AudioManager | null = null;
 
   public cameraManager: CameraManager | null = null;
 
@@ -164,8 +166,7 @@ export class SceneManager {
     );
     this.camera.position.set(0, 0, 4);
 
-    // 初始化立方相机和渲染目标（用于后续实时捕获清晰反射）
-
+    // 初始化立方相机和渲染目标
     this.orthographicCamera = new THREE.OrthographicCamera(
       -this.sizes.width / 2,
       this.sizes.width / 2,
@@ -183,18 +184,21 @@ export class SceneManager {
     this.renderer.setPixelRatio(this.sizes.pixelRatio);
     this.renderer.setClearColor(new THREE.Color('#ffffff'));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.shadowMap.enabled = true;
 
     this.timer = new THREE.Timer();
 
-    const axesHelper = new THREE.AxesHelper(5);
-    this.scene.add(axesHelper);
+    // const axesHelper = new THREE.AxesHelper(5);
+    // this.scene.add(axesHelper);
 
     this.initPostProcessing();
-    this.initGui();
+    // this.initGui();
 
     this.modelManager = ModelManager.getInstance();
     this.materialManager = MaterialManager.getInstance();
+    this.audioManager = AudioManager.getInstance();
 
     this.customColorParams = sceneConfig.colors.get('custom') as CustomColor;
     /**
@@ -299,17 +303,6 @@ export class SceneManager {
       console.error('模型加载失败', err);
       return percent;
     } finally {
-      /*
-       初始化加载 t_env_night.hdr、t_env_light.hdr
-       */
-      // const t_env_night = this.materialManager.getCache('t_env_night') ?? null;
-      // const t_env_light = this.materialManager.getCache('t_env_light') ?? null;
-      // this.envMaps = {
-      //   t_env_night,
-      //   t_env_light,
-      // };
-      // await this.materialManager.initEnvironment('t_env_light');
-
       await this.prepareScene();
       await this.createScene();
       this.compileScene();
@@ -317,16 +310,6 @@ export class SceneManager {
   }
 
   public async prepareScene(): Promise<void> {
-    // r.addNode(uB)  // 挂载音频
-    // r.addNode(mM)  // 显示UI状态， 状态 1
-
-    // 实时环境贴图生成器
-    // this._environment = r.addNode(new J3({
-    //     scene: r.scene,
-    //     layer: Ae.LAYER_CAPTURE,
-    //     resolution: 512
-    // })),
-
     this.cubeRenderTarget = this.createCubeRenderTarget(512, false, false, 0, true);
     this.cubeTexture.value = this.cubeRenderTarget.texture;
     this.cubeCamera = new THREE.CubeCamera(1, 100, this.cubeRenderTarget);
@@ -334,14 +317,8 @@ export class SceneManager {
     this.blurPass = new MipBlurPass(this.renderer, this.cubeRenderTarget);
     this.blurPass.blurIntensity = 4.5;
 
-    // Ae.ut_cubeCapture = this._environment.cubeTexture,
-    // Ae.ut_blurCapture = this._environment.blurTexture;
     sceneConfig.ut_cubeCapture.value = this.cubeRenderTarget.texture;
     sceneConfig.ut_blurCapture.value = this.blurPass.blurTexture;
-
-    // this.materialManager.ut_white
-    // this.materialManager.ut_dark
-    // this.materialManager.ut_floorMap
 
     /**
      * 处理各种材质
@@ -392,9 +369,7 @@ export class SceneManager {
     ) as ModelGroup;
     const sm_curvatureMeshData = sm_curvatureModelCache?.userData?.meshData as ModelMeshData;
 
-    // m.name == "曲率" && (m.material = NO,
-    // _.materials.m_curvature = m.material,
-    // m.layers.enable(Ae.LAYER_CAPTURE))
+    // m.name == "曲率
     this.materialManager.initCurvatureMaterial(sm_curvatureMeshData);
 
     Object.values(sm_curvatureMeshData.materials).forEach((item) => {
@@ -458,7 +433,6 @@ export class SceneManager {
     // sceneConfig.u_reflect.u_reflectTexture.value = this.reflectManager!.reflectTexture;
 
     // 创建环境贴图管理器
-    // new YO(Ae.ut_env_night.value, Ae.ut_env_light.value);
     this.envManager = new EnvironmentManager(
       this.renderer,
       this.scene,
@@ -467,29 +441,19 @@ export class SceneManager {
     );
 
     // 设置 起始房间 发光材质设置
-    // l = r.addNode(Ae.sm_startroom)
     this.scene.add(sm_startroomModelCache);
-    // g = r.addNode(new qO(l))
     this.materialManager.initStartroomLightMaterial(sm_startroomModelCache);
 
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
 
-    // _ = new dO
     this.boxProjectionProbe = new BoxProjectionProbe(this.renderer, carModelCache);
-    // this.boxProjectionProbe.boxProjection = true;
-    // this.boxProjectionProbe.debug = true;
     this.scene.add(carModelCache);
 
-    // this.viewer.addComponent(Ae.sm_car, _);
-
-    // _.probeBoxMin.set(-3, -.1, -1.5),
     this.boxProjectionProbe.probeBoxMin.set(-3, -0.1, -1.5);
     this.boxProjectionProbe.probeBoxMax.set(3.6, 3, 1.5);
 
-    // m = r.addNode(new ZO(A))
     this.materialManager.initCarLightMaterial(carModelCache);
 
-    // D = r.addNode(new Hl({ springLength: 11, rotation: new go(0,Math.PI * .5,0), fov: 33.4, lookAt: new Li(0,.8,0) }))
     this.springCamera = new SpringCamera({
       springLength: 11,
       rotation: new THREE.Euler(0, Math.PI * 0.5, 0),
@@ -509,72 +473,48 @@ export class SceneManager {
     );
 
     // 添加 车轮旋转 + 速度控制 + 相机震动强度 + 背景加速效果
-    // const R = r.addNode(new $O(A, U));
     this.carMotionManager = new CarMotionManager(carModelCache, this.cameraManager);
     this.scene.add(this.modelManager.getCache('sm_speedup' as CacheKey) as ModelGroup);
 
-    // ne = r.addNode(cB)
     this.modelManager.initWeiyiModel();
 
-    // r.addNode(xB) sm_car_lightbar 灯光控制
+    // 灯光控制
     this.modelManager.initLightbarModel();
-    //  r.addNode(eB) sm_size
+    // sm_size
     this.modelManager.initSizeModel();
-    // r.addNode(tB) sm_curvature
+    // sm_curvature
     this.modelManager.initCurvatureModel();
-    // r.addNode(nB) sm_windspeed
+    // sm_windspeed
     this.modelManager.initWindspeedModel();
-    // r.addNode(iB) sm_linecar
+    // sm_linecar
     this.modelManager.initLinecarModel();
-    // r.addNode(lB) sm_carradar -> m_radarPoints
+    // sm_carradar -> m_radarPoints
     const pointMaterial = this.materialManager.getRadarPointMaterial();
     this.modelManager.initCarRadarPointsModel(pointMaterial);
-    // r.addNode(rB) sm_carradar
+    // sm_carradar
     this.modelManager.initCarradarModel();
-    // r.addNode(sB) sm_simpleCar
+    // sm_simpleCar
     this.modelManager.initSimpleCarModel();
 
-    // r.addPlugin(new K3({}))
     this.effect.bloomEffect = new BloomEffect({
-      blendFunction: THREE.AdditiveBlending, // mo -> blendFunction: Ze.ADD,
+      blendFunction: THREE.AdditiveBlending,
       luminanceThreshold: 0, // 亮度阈值
       luminanceSmoothing: 1.6, // 亮度平滑度
-      mipmapBlur: true, // 高性能多级纹理模糊
+      mipmapBlur: true,
+      intensity: 1.2,
     });
 
     this.composer!.addPass(new EffectPass(this.camera, this.effect.bloomEffect));
 
-    // fO 抗锯齿
     this.effect.smaaEffect = new SMAAEffect({
       preset: SMAAPreset.MEDIUM,
     });
     const effectPass = new EffectPass(this.camera, this.effect.smaaEffect!);
     this.composer!.addPass(effectPass);
-
-    // this._envController = h  // this.envManager
-    // this._springCtr = U  // this.cameraManager
-    // this._carLightController = m  // this.materialManager.initCarLightMaterial(car);
-    // this._topLightController = g  // this.materialManager.initStartroomLightMaterial(sm_startroomModelCache)
-    // this._carSpeedUpdate = R // this.carMotionManager = new CarMotionManager(carModelCache, this.cameraManager);
-
-    // this._bloom = Pe   // new K3  // this.effect.bloomEffect
-    // this._projectionProbe = _  // _ = new dO()    // this.boxProjectionProbe
-
-    // this._accessories = {
-    //   s1_c: ne,      // ne = r.addNode(cB) // this.modelManager.initWeiyiModel();
-    //   s1_cpcl: ce,   // ce = r.addNode(xB) // this.modelManager.initLightbarModel();
-    //   s2_b: xe,      // xe = r.addNode(eB) // this.modelManager.initSizeModel();
-    //   s2_c: Se,      // Se = r.addNode(tB) // this.modelManager.initCurvatureModel()
-    //   s3_b: $,       // $ = r.addNode(nB)  // this.modelManager.initWindspeedModel();
-    //   s3_c: q,       // q = r.addNode(iB)  // this.modelManager.initLinecarModel();
-    //   s4_b: N,       // N = r.addNode(lB)  // this.modelManager.initCarRadarPointsModel()
-    //   s4_c: ie,      // ie = r.addNode(rB) // this.modelManager.initCarradarModel();
-    //   s4_cSC: _e,    // _e = r.addNode(sB) // this.modelManager.initSimpleCarModel();
-    // };
   }
 
   public compileScene() {
-    // BO()  共享材质
+    // 共享材质
     const model = this.modelManager.getCache('sm_simpleCar' as CacheKey);
 
     if (!model) return;
@@ -582,47 +522,27 @@ export class SceneManager {
     tempMaterial.matcap = sceneConfig.ut_scar_matcap.value;
     tempMaterial.needsUpdate = true;
 
-    // this.viewer.compile()
-    // A, m, D, U: this._renderer, this._scene, this._camera, this._scene
-    // this.renderer.compile(this.scene, this.camera);
-
     eventBus.emit('ChangeModule', { module: 0 });
 
-    /**
-     * jU(): 显示一个平滑动画的加载进度条 → 加载完成后自动渐隐消失 → 消失后播放背景音乐 audioManager
-     */
-
-    // let r = Ae.getCustomParams()
     const r = this.getCustomParams();
+    console.log('r', r);
     if (r) eventBus.emit('ChangeColor', r);
   }
 
-  // 模块切换处理 eventBus.on('UPDATESHOWINGSTATE')
+  // 模块切换处理
   handleModuleChange = ({ module }: { module: Module }): void => {
     console.log('handleModuleChange', module);
     this.currentModule = module || 0;
 
-    // 车移动模块获取 moduel 用于 update
+    // 车移动模块
     this.carMotionManager?.getCurrentModule(module);
 
     // 隐藏所有配件
     this.hideAllAccessories();
 
     this.screenshotManager?.hide();
-    // g.targetVelocity = 0
     this.carMotionManager!.targetVelocity = 0;
     this.cameraManager!.setNewRange();
-    // xe.copy(Ae.u_floorLightMapColor.value)
-
-    // const r = this._envController,   // this.envManager
-    //   s = this._springCtr,           // this.cameraManager
-    //   h = this._carLightController,  // this.materialManager.initCarLightMaterial
-    //   l = this._topLightController,  // this.materialManager.initStartroomLightMaterial
-    //   g = this._carSpeedUpdate,      // this.carMotionManager
-    //   _ = this._bloom,               // this.effect.bloomEffect
-    //   A = this._projectionProbe,     // this.boxProjectionProbe
-    //   m = this._accessories;
-    //   D                              // transitionModuel
 
     switch (module) {
       case 0:
@@ -646,7 +566,6 @@ export class SceneManager {
           7,
           new THREE.Euler(0, -0.89, 0.1)
         );
-        // s2_b = xe = eB
         this.modelManager.showModel(this.modelManager.sizeModel, (val: number) =>
           this.modelManager.setSizeVisibility(val)
         );
@@ -660,7 +579,6 @@ export class SceneManager {
           7,
           new THREE.Euler(0, 0.65, 0.1)
         );
-        // s3_b = $ = nB
         this.modelManager.showModel(this.modelManager.windSpeedModel, (val: number) =>
           this.modelManager.setWindSpeedVisibility(val)
         );
@@ -690,7 +608,6 @@ export class SceneManager {
         this.cameraManager!.setNewRange([0.2, 1.3]);
         this.transitionModuel(0.2, 1, 3, 0, 1.5);
         this.cameraManager!.targetFov = 33.4;
-        // s4_b = N = lB
         this.modelManager.showModel(this.modelManager.carRadarPointModel, (val: number) =>
           this.modelManager.setRadarPointsVisibility(val)
         );
@@ -771,18 +688,6 @@ export class SceneManager {
 
   // 隐藏所有配件
   public hideAllAccessories(): void {
-    // this.accessories = {
-    //   s1_c: ne,      // ne = r.addNode(cB) // this.modelManager.initWeiyiModel();
-    //   s1_cpcl: ce,   // ce = r.addNode(xB) // this.modelManager.initLightbarModel();
-    //   s2_b: xe,      // xe = r.addNode(eB) // this.modelManager.initSizeModel();
-    //   s2_c: Se,      // Se = r.addNode(tB) // this.modelManager.initCurvatureModel()
-    //   s3_b: $,       // $ = r.addNode(nB)  // this.modelManager.initWindspeedModel();
-    //   s3_c: q,       // q = r.addNode(iB)  // this.modelManager.initLinecarModel();
-    //   s4_b: N,       // N = r.addNode(lB)  // this.modelManager.initCarRadarPointsModel()
-    //   s4_c: ie,      // ie = r.addNode(rB) // this.modelManager.initCarradarModel();
-    //   s4_cSC: _e,    // _e = r.addNode(sB) // this.modelManager.initSimpleCarModel();
-    // };
-
     const arr = [
       {
         model: this.modelManager.weiyiModel,
@@ -988,13 +893,14 @@ export class SceneManager {
       .to(sceneConfig.u_floorReflectIntensity, { value: 1, duration: 1.5, ease: 'power1.inOut' });
   }
 
-  // 解析 url, "custom"自定义颜色，字符串数字颜色索引，0默认颜色
+  // 解析 url
   getCustomParams(): 'custom' | string | 0 {
     const urlParams = new URLSearchParams(window.location.search);
     const vParam = urlParams.get('v');
 
     // 格式 1：RRGGBB + 粗糙度(2位) + 金属度(2位)
     if (vParam && vParam.length === 10) {
+      console.log('vParam', vParam);
       const colorHex = vParam.slice(0, 6);
       const roughHex = vParam.slice(6, 8);
       const metalHex = vParam.slice(8, 10);
@@ -1026,52 +932,8 @@ export class SceneManager {
     if (vParam && vParam.startsWith('h') && vParam.length === 3) {
       return vParam.slice(1, 3);
     }
-
-    // 不符合任何格式，返回默认值
     return 0;
   }
-
-  // url + 材质参数
-  generateCustomParams(): string {
-    // 从 Map 中安全获取 custom（解决 undefined 类型报错）
-    const custom = sceneConfig.colors.get('custom');
-    if (!custom) return '';
-
-    if (Ie.currentColorIndex === 'custom') {
-      // 粗糙度 → 2位十六进制
-      let n = Math.round(custom.rough * 255).toString(16);
-      if (n.length < 2) n = '0' + n;
-
-      // 金属度 → 2位十六进制
-      let r = Math.round(custom.metal * 255).toString(16);
-      if (r.length < 2) r = '0' + r;
-
-      // 颜色十六进制
-      const s = custom.col.getHexString();
-
-      // 拼接完整 URL
-      const base = 'https://gamemcu.com/su7?v=';
-      return base + s + n + r;
-    } else {
-      // 预设颜色
-      const base = 'https://gamemcu.com/su7?v=h';
-      return base + Ie.currentColorIndex;
-    }
-  }
-
-  // 处理切换颜色
-  // handleChangeColor(index: 'custom' | string | 0): void {
-  //   this.currentColorIndex = index;
-
-  //   // 警车
-  //   if (index === '11') {
-  //     sceneConfig.u_policeColorChange.value = 1;
-  //     sceneConfig.sm_car_lightbar.visible = true;
-  //   } else {
-  //     sceneConfig.u_policeColorChange.value = 0;
-  //     sceneConfig.sm_car_lightbar.visible = false;
-  //   }
-  // }
 
   // 后期处理
   private initPostProcessing(): void {
@@ -1093,16 +955,6 @@ export class SceneManager {
     const render = () => {
       this._animationFrameId = requestAnimationFrame(render);
 
-      //   update(r) {
-      //     if (Ae.u_speedTime.value += r * Ae.u_speedUpBackgroundValue.value * .2,
-      //     Ae.u_time.value += r,
-      //     Ae.sm_car) {
-      //         const s = Ae.sm_car.meshData.materials.Car_body;
-      //         s.metalness = Ae.u_carMetalness.value,
-      //         s.roughness = Ae.u_carRoughness.value,
-      //         s.color.copy(Ae.u_carColor.value)
-      //     }
-      // }
       this.timer.update();
       const deltaTime = this.timer.getDelta();
       const elapsedTime = this.timer.getElapsed();
@@ -1191,8 +1043,13 @@ export class SceneManager {
     this.screenshotManager!.screenshot();
   }
 
+  // 点击 / 按压屏幕
   private onPointerDown = () => {
     console.log('onPointerDown');
+
+    if (this.currentModule == 1 && this.currentColorName == '11') {
+      this.audioManager && this.audioManager.playBGM('policecar-bgm');
+    }
 
     this.isClickEffect = true;
     this.handleClickEffect(true);
@@ -1201,6 +1058,8 @@ export class SceneManager {
   private onPointerUp = () => {
     console.log('onPointerUp');
     this.isClickEffect = false;
+
+    this.audioManager && this.audioManager.fadeOutBGM('policecar-bgm', 1);
     this.handleClickEffect(false);
   };
 
@@ -1220,11 +1079,9 @@ export class SceneManager {
           this.cameraManager!._springlengthOffset = -3;
           this.cameraManager!._lerpStrength = 0.5;
 
-          // m.s1_c.show()
           this.modelManager.showModel(this.modelManager.weiyiModel, (val: number) =>
             this.modelManager.setWeiYiPosition(val)
           );
-          // m.s1_cpcl.show(.5, .2),
           this.modelManager.showModel(
             this.modelManager.lightbarModel,
             (val: number) => this.modelManager.setLightbarVisibility(val),
@@ -1258,7 +1115,6 @@ export class SceneManager {
         break;
       case 2:
         if (isClickEffect) {
-          // m.s2_c.show(1, 0.2)
           this.modelManager.showModel(
             this.modelManager.curvatureModel,
             (val: number) => this.modelManager.setCurvatureVisibility(val),
@@ -1280,7 +1136,6 @@ export class SceneManager {
         break;
       case 3:
         if (isClickEffect) {
-          // m.s3_c.show(1, 0.2)
           this.modelManager.showModel(
             this.modelManager.linecarModel,
             (val: number) => this.modelManager.setLineCarVisibility(val),
@@ -1307,19 +1162,15 @@ export class SceneManager {
           this.carMotionManager!.targetVelocity = 16;
           this.carMotionManager!.lerpStrength = 0.5;
 
-          // m.s4_c.show()
           this.modelManager.showModel(this.modelManager.carRadarModel, (val: number) =>
             this.modelManager.setCarRadarVisibility(val)
           );
-          // m.s4_cSC.show()
           this.modelManager.showModel(this.modelManager.simpleCarData, (val: number) =>
             this.modelManager.setSimpleCarVisibility(val)
           );
-          // m.s1_c.show()
           this.modelManager.showModel(this.modelManager.weiyiModel, (val: number) =>
             this.modelManager.setWeiYiPosition(val)
           );
-          // m.s1_cpcl.show(0.5, 0.2)
           this.modelManager.showModel(
             this.modelManager.lightbarModel,
             (val: number) => this.modelManager.setLightbarVisibility(val),
@@ -1354,12 +1205,13 @@ export class SceneManager {
     }
   }
 
-  setColor = ({ col }: { col: THREE.Color }) => {
-    console.log('col', col);
+  // setColor = ({ col }: { col: THREE.Color }) => {
+  //   console.log('col', col);
 
-    col.getHSL(this.customColorParams.hsl);
-    this.customColorParams.col.copy(col).convertSRGBToLinear();
-  };
+  //   col.getHSL(this.customColorParams.hsl);
+  //   // this.customColorParams.col.copy(col).convertSRGBToLinear();
+  //   this.customColorParams.col.copy(col);
+  // };
 
   handleChangeColor = (colorName?: string) => {
     // 警灯
@@ -1442,17 +1294,33 @@ export class SceneManager {
     this.handleChangeColor();
   };
 
+  playBgm = ({ isPlayingBgm }: { isPlayingBgm: boolean }) => {
+    isPlayingBgm && this.audioManager && this.audioManager.playBGM('bgm');
+    !isPlayingBgm && this.audioManager && this.audioManager.stopBackgroundMusic();
+  };
+
+  playTempSound = () => {
+    this.audioManager && this.audioManager.playTempSound('chooseColor');
+  };
+
   // 点击绑定
   bindEvents(): void {
+    // changeModule
     eventBus.on('ChangeModule', this.handleModuleChange.bind(this));
-    eventBus.on('ChangeColor', this.handleChangeColor.bind(this));
 
+    // color
+    eventBus.on('ChangeColor', this.handleChangeColor.bind(this));
     eventBus.on('RequestColorList', this.handleRequestColorList.bind(this));
     eventBus.on('ChangeColor:ChangeColorParam', this.changeColorParam.bind(this));
 
-    if (!this.renderer?.domElement) return;
+    // audio
+    eventBus.on('SetPlayingBgm', this.playBgm.bind(this));
+    eventBus.on('SetPlayChooseMusic', this.playTempSound.bind(this));
 
     this.unbindEvents();
+
+    if (!this.renderer?.domElement) return;
+
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
   }
@@ -1464,7 +1332,9 @@ export class SceneManager {
 
     eventBus.off('RequestColorList', this.handleRequestColorList);
     eventBus.off('ChangeColor:ChangeColorParam', this.changeColorParam);
-    eventBus.off('ChangeColor:SetColor', this.setColor);
+    eventBus.off('SetPlayingBgm', this.playBgm);
+    eventBus.off('SetPlayChooseMusic', this.playTempSound);
+    // eventBus.off('ChangeColor:SetColor', this.setColor);
 
     if (!this.renderer?.domElement) return;
 
@@ -1485,6 +1355,9 @@ export class SceneManager {
 
     // 截屏
     this.screenshotManager!.dispose();
+
+    // 音频
+    this.audioManager && this.audioManager.dispose();
 
     this.unbindEvents();
 

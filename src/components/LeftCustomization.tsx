@@ -24,7 +24,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
   const { colorChooseVisible } = useColorStore(useShallow((state) => state));
   const isVisible = colorChooseVisible && currentModule === 5;
 
-  const isStoreSwap = useStore((state) => state.isStoreSwap);
+  const isMobile = useStore((state) => state.isMobile);
 
   // 色相
   const colorList = useColorStore((state) => state.colorList);
@@ -55,7 +55,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
               // transform: isVisible ? 'translateX(0)' : 'translateX(-20px)',
             }}
           >
-            {isStoreSwap ? (
+            {!isMobile ? (
               <div className="LeftCustomBar-container" style={{ opacity: 1, transform: 'none' }}>
                 <div className="LeftCustomBar-content">
                   <div className="LeftCustomBar-top">

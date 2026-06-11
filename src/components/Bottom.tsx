@@ -1,9 +1,14 @@
+'use client';
+
 import { useColorStore, getColorList } from '@/store/useColorStore';
+import { useAudioStore } from '@/store/useAudioStore';
 export default function Bottom({ currentModule }: { currentModule: Module }) {
   const customColor = useColorStore((state) => state.colorList.get('custom'));
   const colorName = useColorStore((state) => state.colorName);
   const changeColor = useColorStore((state) => state.changeColor);
   const toggleColorChooseVisible = useColorStore((state) => state.toggleColorChooseVisible);
+
+  const setPlayChooseMusic = useAudioStore((state) => state.setPlayChooseMusic);
 
   const colorList: Map<string, ColorThemeItem | CustomColor> = getColorList();
 
@@ -27,6 +32,7 @@ export default function Bottom({ currentModule }: { currentModule: Module }) {
                     backgroundImage: `url(/icon/${colorList.get(item)!.bgUrl})`,
                   }}
                   onClick={() => {
+                    setPlayChooseMusic();
                     toggleColorChooseVisible(item === 'custom');
                     colorName !== item && changeColor(item);
                   }}

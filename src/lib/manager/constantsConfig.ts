@@ -81,6 +81,8 @@ class SceneConfig {
   public u_carRoughness: { value: number };
   public positionDirction: Record<DirectionKeys, Vector3>;
 
+  public audioList: Array<{ key: string; url: string }>;
+
   constructor() {
     // 初始化基础参数
     this.maxSpeed = 20;
@@ -159,7 +161,8 @@ class SceneConfig {
       [
         '00',
         {
-          col: new Color('#25d6e9').convertSRGBToLinear(),
+          // col: new Color('#25d6e9').convertSRGBToLinear(),
+          col: new Color('#25d6e9'),
           bgUrl: 'b1.webp',
           metal: 0.16,
         },
@@ -167,7 +170,8 @@ class SceneConfig {
       [
         '01',
         {
-          col: new Color('#7c8670').convertSRGBToLinear(),
+          // col: new Color('#7c8670').convertSRGBToLinear(),
+          col: new Color('#7c8670'),
           bgUrl: 'b2.webp',
           metal: 0.17,
         },
@@ -175,7 +179,8 @@ class SceneConfig {
       [
         '02',
         {
-          col: new Color('#9C9C9C').convertSRGBToLinear(),
+          // col: new Color('#9C9C9C').convertSRGBToLinear(),
+          col: new Color('#9C9C9C'),
           bgUrl: 'b3.webp',
           metal: 0.16,
         },
@@ -183,14 +188,16 @@ class SceneConfig {
       [
         '03',
         {
-          col: new Color('#D9D9D9').convertSRGBToLinear(),
+          // col: new Color('#D9D9D9').convertSRGBToLinear(),
+          col: new Color('#D9D9D9'),
           bgUrl: 'b4.webp',
         },
       ],
       [
         '04',
         {
-          col: new Color('#7C6D83').convertSRGBToLinear(),
+          // col: new Color('#7C6D83').convertSRGBToLinear(),
+          col: new Color('#7C6D83'),
           bgUrl: 'b5.webp',
           rough: 0.03,
           metal: 0.27,
@@ -199,7 +206,8 @@ class SceneConfig {
       [
         '05',
         {
-          col: new Color('#d15523').convertSRGBToLinear(),
+          // col: new Color('#d15523').convertSRGBToLinear(),
+          col: new Color('#d15523'),
           bgUrl: 'b6.webp',
           rough: 0.13,
         },
@@ -207,14 +215,16 @@ class SceneConfig {
       [
         '06',
         {
-          col: new Color('#7495be').convertSRGBToLinear(),
+          // col: new Color('#7495be').convertSRGBToLinear(),
+          col: new Color('#7495be'),
           bgUrl: 'b7.webp',
         },
       ],
       [
         '07',
         {
-          col: new Color('#54657f').convertSRGBToLinear(),
+          // col: new Color('#54657f').convertSRGBToLinear(),
+          col: new Color('#54657f'),
           bgUrl: 'b8.webp',
           rough: 0.12,
           metal: 0.16,
@@ -223,7 +233,8 @@ class SceneConfig {
       [
         '08',
         {
-          col: new Color('#2a2933').convertSRGBToLinear(),
+          // col: new Color('#2a2933').convertSRGBToLinear(),
+          col: new Color('#2a2933'),
           bgUrl: 'b9.webp',
           metal: 0.77,
         },
@@ -231,7 +242,8 @@ class SceneConfig {
       [
         '09',
         {
-          col: new Color('#FFFFFF').convertSRGBToLinear(),
+          // col: new Color('#FFFFFF').convertSRGBToLinear(),
+          col: new Color('#FFFFFF'),
           bgUrl: 'b10.webp',
           carCover: this.ut_car_body_t_gm,
         },
@@ -239,7 +251,8 @@ class SceneConfig {
       [
         '10',
         {
-          col: new Color('#FFFFFF').convertSRGBToLinear(),
+          // col: new Color('#FFFFFF').convertSRGBToLinear(),
+          col: new Color('#FFFFFF'),
           bgUrl: 'b12.webp',
           rough: 0.7,
           metal: 0,
@@ -252,7 +265,8 @@ class SceneConfig {
       [
         '11',
         {
-          col: new Color('#FFFFFF').convertSRGBToLinear(),
+          // col: new Color('#FFFFFF').convertSRGBToLinear(),
+          col: new Color('#FFFFFF'),
           bgUrl: 'b13.webp',
           carCover: this.ut_police_Car_body_BC,
           floorMap: this.ut_police_floor_bc,
@@ -276,6 +290,13 @@ class SceneConfig {
       ONE: new Vector3(1, 1, 1),
       NEG_ONE: new Vector3(-1, -1, -1),
     };
+
+    // 音频
+    this.audioList = [
+      { key: 'bgm', url: '/audio/bgm.ogg' },
+      { key: 'chooseColor', url: '/audio/chooseColor.mp3' },
+      { key: 'policecar-bgm', url: '/audio/policecar-bgm.mp3' },
+    ];
   }
 
   /**

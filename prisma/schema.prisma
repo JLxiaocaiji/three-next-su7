@@ -31,3 +31,26 @@ model nb_gcj02_points {
   @@schema("map")
   // @@map("nb_gcj02_points")
 }
+
+model Visit {
+  id        String   @id @default(cuid())
+  ip        String   @db.VarChar(45) // 支持IPv6
+  path      String   @db.Text
+  userAgent String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ip])
+  @@index([createdAt])
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  message   String   @db.Text
+  stack     String?  @db.Text
+  page      String   @db.Text
+  ip        String   @db.VarChar(45)
+  userAgent String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+}

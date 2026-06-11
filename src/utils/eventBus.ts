@@ -16,9 +16,6 @@ type Events = {
   ChangeModule: { module: Module };
   // 获取当前模块
   GetCurrentModule: { module: Module };
-
-  // 点击 / 按压屏幕
-  SetClickEffect: { isClickEffect: boolean };
   // 获取当前是否处于点击状态
   GetClickEffect: { isClickEffect: boolean };
 
@@ -57,8 +54,10 @@ type Events = {
   'ScreenshotManager:hide': { duration?: number };
   'ScreenshotManager:screenshot': void;
   'ScreenshotManager:complete': { picUrl: string; width: number; height: number; visible: boolean };
-  // ScreenshotManager 反馈给 UI 的状态
-  'ScreenshotManager:status': { isSaving: boolean; picUrl?: string };
+
+  // 音频
+  SetPlayingBgm: { isPlayingBgm: boolean }; // 设置背景音乐播放状态
+  SetPlayChooseMusic: void; // 播放选择音乐
 };
 
 export const eventBus = mitt<Events>();

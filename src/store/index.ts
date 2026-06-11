@@ -19,8 +19,9 @@ interface State {
 
   // 点击效果
   isClickEffect: boolean;
-  setClickEffect: (isClickEffect: boolean) => void;
 
+  isMobile: boolean;
+  setIsMobile: (isMobile: boolean) => void;
   // 是否长宽切换
   isStoreSwap: boolean;
   setStoreSwap: (isStoreSwap: boolean) => void;
@@ -45,7 +46,12 @@ export const useStore = create<State>()(
           currentModule: 0,
           isClickEffect: false,
 
+          isMobile: false,
           isStoreSwap: false,
+          setIsMobile: (isMobile: boolean) =>
+            set((store) => {
+              store.isMobile = isMobile;
+            }),
           setStoreSwap: (isStoreSwap: boolean) =>
             set((store) => {
               store.isStoreSwap = isStoreSwap;
@@ -62,12 +68,6 @@ export const useStore = create<State>()(
               draft.currentModule = module;
               eventBus.emit('ChangeModule', { module });
             }),
-
-          setClickEffect: (isClickEffect: boolean) =>
-            set((draft) => {
-              draft.isClickEffect = isClickEffect;
-              eventBus.emit('SetClickEffect', { isClickEffect });
-            }),
           cleanup: () => {},
         };
       },
@@ -83,14 +83,6 @@ export const useStore = create<State>()(
     )
   )
 );
-
-// 获取当前模块
-// const getCurrentModule = () => {
-//   const currentModule = useStore.getState().currentModule;
-//   eventBus.emit('GetCurrentModule', { module: currentModule });
-// };
-// eventBus.off('GetCurrentModule', getCurrentModule);
-// eventBus.on('GetCurrentModule', getCurrentModule);
 
 const loadProgress = ({ progress }: { progress: number }) => {
   useStore.setState({ progress: progress });

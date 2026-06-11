@@ -70,7 +70,7 @@ export const useColorStore = create<ColorStoreState>()(
           },
         ],
       ]),
-      colorName: 'custom',
+      colorName: '00',
       colorChooseVisible: false,
 
       /**

@@ -1,6 +1,12 @@
 'use client';
 
+import { useAudioStore } from '@/store/useAudioStore';
+
 export default function Header({ currentModule }: { currentModule: number }) {
+  const isPlayingBgm = useAudioStore((state) => state.isPlayingBgm);
+  console.log('isPlayingBgm', isPlayingBgm);
+  const setPlayBgm = useAudioStore((state) => state.setPlayBgm);
+
   return (
     <>
       {/* header */}
@@ -112,8 +118,13 @@ export default function Header({ currentModule }: { currentModule: number }) {
       </div>
       {/* 右上角 静音 */}
       <div className="Mute-container">
-        <div className="Mute-content">
-          <img src="/icon/open.webp" alt="" />
+        <div
+          className="Mute-content"
+          onClick={() => {
+            setPlayBgm(!isPlayingBgm);
+          }}
+        >
+          <img src={isPlayingBgm ? '/icon/open.webp' : '/icon/mute.webp'} alt="" />
         </div>
       </div>
     </>
