@@ -115,7 +115,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         <Alpha
                           className="SliderHue"
                           background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                          hsva={{ ...hsva, a: metal }}
+                          hsva={{ ...hsva, a: metal ?? 0.1 }}
                           style={{
                             width: '11rem',
                             height: '5px',
@@ -132,7 +132,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                         <Alpha
                           className="SliderHue"
                           background={`linear-gradient(to right, rgb(0,0,0), rgb(255,255,255))`}
-                          hsva={{ ...hsva, a: rough }}
+                          hsva={{ ...hsva, a: rough ?? 0.03 }}
                           style={{
                             width: '11rem',
                             height: '5px',
@@ -205,7 +205,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           direction="vertical"
                           reverse={true}
                           background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
-                          hsva={{ ...hsva, a: rough }}
+                          hsva={{ ...hsva, a: rough ?? 0.03 }}
                           style={{
                             width: '5px',
                             height: '11rem',
@@ -245,7 +245,7 @@ export default function LeftCustomization({ currentModule }: { currentModule: nu
                           direction="vertical"
                           reverse={true}
                           background={`linear-gradient(to bottom, rgb(0,0,0), rgb(255,255,255))`}
-                          hsva={{ ...hsva, a: metal }}
+                          hsva={{ ...hsva, a: metal ?? 0.1 }}
                           style={{
                             width: '5px',
                             height: '11rem',

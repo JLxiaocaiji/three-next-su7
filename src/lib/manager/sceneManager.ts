@@ -1221,8 +1221,22 @@ export class SceneManager {
       this.modelManager.lightbarModel.model!.visible = false;
     }
 
+    const theme =
+      sceneConfig.colors.get(colorName || 'custom') ??
+      ({
+        col: '#ffc03f',
+        hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
+        bgUrl: 'custom.webp',
+        rough: 0.03,
+        metal: 0.1,
+        carCover: null,
+        carWindowFilm: null,
+        carWindowRoughness: 0,
+        floorMap: null,
+      } as const);
+
     const { col, hsl, bgUrl, rough, metal, carCover, carWindowFilm, carWindowRoughness, floorMap } =
-      sceneConfig.colors.get(colorName || 'custom');
+      theme as ColorThemeItem;
 
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;

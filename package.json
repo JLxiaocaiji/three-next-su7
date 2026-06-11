@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "NODE_ENV=production next build",
+    "build": "cross-env NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
@@ -53,6 +53,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "eslint-config-prettier": "^10.1.8",
@@ -65,7 +66,7 @@
     "qrcode": "^1.5.4",
     "raw-loader": "^4.0.2",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^6.0.3",
     "vite": "^8.0.8",
     "vite-plugin-next": "^0.0.1-beta.1"
   }
