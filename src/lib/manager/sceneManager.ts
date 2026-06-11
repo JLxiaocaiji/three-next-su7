@@ -280,7 +280,7 @@ export class SceneManager {
       const allLoaded = modelLoaded + materialLoaded;
       percent = Math.floor((allLoaded / total) * 100);
 
-      eventBus.emit('LoadingProgress', { progress: percent });
+      eventBus.emit('LoadingProgress', { progress: percent - 1 });
     };
 
     try {
@@ -314,6 +314,8 @@ export class SceneManager {
       } else {
         this.renderer.render(this.scene, this.camera);
       }
+
+      eventBus.emit('LoadingProgress', { progress: 100 });
 
       setTimeout(() => {
         this.startRender();
