@@ -19,7 +19,7 @@ class SceneConfig {
   public sm_windspeed: any;
   public sm_linecar: any;
   public sm_carradar: any;
-  public sm_simpleCar: any;
+  public sm_simplecar: any;
   public sm_car_lightbar: any;
 
   // 纹理 Uniform

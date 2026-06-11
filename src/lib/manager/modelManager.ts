@@ -124,7 +124,7 @@ export class ModelManager {
     { name: CacheKey.sm_carradar, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_curvature, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_linecar, priority: 2, suffix: '.bin' },
-    { name: CacheKey.sm_simpleCar, priority: 2, suffix: '.bin' },
+    { name: CacheKey.sm_simplecar, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_size, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_speedup, priority: 2, suffix: '.bin' },
     { name: CacheKey.sm_startroom, priority: 2, suffix: '.glb' },
@@ -218,7 +218,7 @@ export class ModelManager {
     visibility: 0,
   };
 
-  // sm_simpleCar
+  // sm_simplecar
   public simpleCarData: SimpleModel = {
     car1: null as THREE.Object3D | null,
     car2: null as THREE.Object3D | null,
@@ -946,15 +946,15 @@ export class ModelManager {
     });
   }
 
-  // sm_simpleCar
+  // sm_simplecar
   public initSimpleCarModel() {
-    const model = this.modelCache.get('sm_simpleCar' as CacheKey);
+    const model = this.modelCache.get('sm_simplecar' as CacheKey);
     if (!model || !model.userData.meshData?.materials) return;
 
     const car1 = model.children[0] as THREE.Object3D;
     const car2 = car1.clone();
     model.add(car2);
-    sceneConfig.sm_simpleCar.add(car2);
+    sceneConfig.sm_simplecar.add(car2);
 
     if (!this.sceneManager) {
       this.sceneManager = SceneManager.getInstance();

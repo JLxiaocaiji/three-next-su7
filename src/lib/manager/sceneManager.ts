@@ -396,9 +396,9 @@ export class SceneManager {
     const sm_carradarMeshData = sm_carradarModelCache?.userData?.meshData as ModelMeshData;
     sm_carradarMeshData && this.materialManager.initCarradarMaterial(sm_carradarMeshData);
 
-    // sm_simpleCar
+    // sm_simplecar
     const sm_simpleCarModelCache = this.modelManager.getCache(
-      'sm_simpleCar' as CacheKey
+      'sm_simplecar' as CacheKey
     ) as ModelGroup;
     const sm_simpleCarMeshData = sm_simpleCarModelCache?.userData?.meshData as ModelMeshData;
     sm_simpleCarMeshData && this.materialManager.initSimpleCarMaterial(sm_simpleCarMeshData);
@@ -493,7 +493,7 @@ export class SceneManager {
     this.modelManager.initCarRadarPointsModel(pointMaterial);
     // sm_carradar
     this.modelManager.initCarradarModel();
-    // sm_simpleCar
+    // sm_simplecar
     this.modelManager.initSimpleCarModel();
 
     this.effect.bloomEffect = new BloomEffect({
@@ -515,7 +515,7 @@ export class SceneManager {
 
   public compileScene() {
     // 共享材质
-    const model = this.modelManager.getCache('sm_simpleCar' as CacheKey);
+    const model = this.modelManager.getCache('sm_simplecar' as CacheKey);
 
     if (!model) return;
     const tempMaterial = model.userData.meshData.materials.m_simpleCar as THREE.MeshMatcapMaterial;

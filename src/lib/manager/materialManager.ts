@@ -1273,7 +1273,7 @@ export class MaterialManager {
     meshData.materials.m_carradar = material;
   }
 
-  // sm_simpleCar
+  // sm_simplecar
   public initSimpleCarMaterial(meshData: ModelMeshData): void {
     const tempMatcapMaterial = new THREE.MeshMatcapMaterial({
       transparent: true,
