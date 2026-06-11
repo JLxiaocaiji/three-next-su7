@@ -285,7 +285,12 @@ export class SceneManager {
         return;
       } else {
         this.renderer.compile(this.scene, this.camera);
-        this.startRender();
+
+        setTimeout(() => {
+          // 预渲染第一帧
+          this.renderer.render(this.scene, this.camera);
+          this.startRender();
+        }, 50);
       }
     };
 

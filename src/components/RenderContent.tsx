@@ -45,9 +45,6 @@ export default function ModelPage({}: {}) {
 
     const onProgress = ({ progress }: { progress: number }) => {
       setProgress(progress);
-      // if (progress === 100) {
-      //   sceneRef.current?.startRender();
-      // }
     };
 
     eventBus.on('LoadingProgress', onProgress);
