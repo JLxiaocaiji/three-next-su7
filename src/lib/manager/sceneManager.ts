@@ -187,6 +187,7 @@ export class SceneManager {
     this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
+    this.renderer.setClearColor(0x000000, 1);
 
     this.timer = new THREE.Timer();
 

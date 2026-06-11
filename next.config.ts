@@ -9,8 +9,6 @@ const nextConfig: NextConfig = {
     removeConsole: { exclude: ['warn', 'error'] },
   },
 
-  // allowedDevOrigins: ['10.50.9.24'],
-
   webpack: (config, { dev, isServer }) => {
     if (dev && !isServer) {
       config.watchOptions = {
