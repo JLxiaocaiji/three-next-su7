@@ -4,11 +4,8 @@ import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
 // 配置文件大小限制和允许的MIME类型
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const bodyParser = false
+export const maxDuration = 60
 
 // 音频类型
 const ALLOWED_AUDIO_TYPES = [

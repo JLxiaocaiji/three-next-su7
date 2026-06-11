@@ -1,17 +1,36 @@
-import { generateClientTokenFromReadWriteToken } from '@vercel/blob';
-import { NextResponse } from 'next/server';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST() {
-  // 生成一个有效期为1小时的客户端上传令牌
-  const clientToken = generateClientTokenFromReadWriteToken({
-    token: process.env.BLOB_READ_WRITE_TOKEN!,
-    prefix: 'music/', // 所有音乐文件都存放在music/目录下
-    expiresIn: 3600, // 1小时有效期
-    // 限制只能上传音频文件
-    allowedContentTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/flac'],
-    // 限制单个文件最大50MB
-    maxSize: 50 * 1024 * 1024,
-  });
+export async function POST(req: NextRequest) {
+  const body = (await req.json()) as HandleUploadBody;
 
-  return NextResponse.json({ clientToken });
+  try {
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => {
+        // 强制文件存入 music/ 前缀
+        if (!pathname.startsWith('music/')) {
+          throw new Error('只能上传到 music/ 目录');
+        }
+        return {
+          allowedContentTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/flac'],
+          maximumSizeInBytes: 50 * 1024 * 1024, // 50MB
+          expiresIn: 3600, // 1小时有效期
+          addRandomSuffix: true,
+          access: 'public', 
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        console.log('音频上传完成', blob.pathname, blob.url);
+      },
+    });
+
+    return NextResponse.json(jsonResponse);
+  } catch (err) {
+    return NextResponse.json(
+      { error: (err as Error).message },
+      { status: 400 }
+    );
+  }
 }
