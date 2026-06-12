@@ -987,7 +987,6 @@ export class SceneManager {
       // 相机
       this.cameraManager && this.cameraManager.update(deltaTime);
 
-      console.log('this.u_speedUpBackgroundValue', this.u_speedUpBackgroundValue);
       // 更新材质
       this.materialManager &&
         this.materialManager.update(deltaTime, elapsedTime, this.u_speedUpBackgroundValue);
