@@ -111,9 +111,9 @@ export default function Header({ currentModule }: { currentModule: number }) {
               marginLeft: '0.4rem',
             }}
           >
-            Sound:
+            BGM:
           </p>
-          <p style={{ color: 'rgb(255, 141, 26)', fontWeight: 600 }}>Cuer_Zhao</p>
+          <p style={{ color: 'rgb(255, 141, 26)', fontWeight: 600 }}>Star WalkIn</p>
         </div>
       </div>
       {/* 右上角 静音 */}
