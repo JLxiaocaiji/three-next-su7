@@ -186,7 +186,7 @@ export class SceneManager {
     this.renderer.toneMappingExposure = 1.2;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.setClearColor(0xffffff, 1);
 
     this.timer = new THREE.Timer();
 
@@ -278,9 +278,11 @@ export class SceneManager {
     let percent = 0;
     const updatePercent = () => {
       const allLoaded = modelLoaded + materialLoaded;
-      percent = Math.floor((allLoaded / total) * 100);
+      percent = Math.max(Math.floor((allLoaded / total) * 100), 1);
 
       eventBus.emit('LoadingProgress', { progress: percent - 1 });
+      // eventBus.emit('LoadingProgress', { progress: percent });
+      // this.startRender();
     };
 
     try {
@@ -304,22 +306,12 @@ export class SceneManager {
       console.error('模型加载失败', err);
       return percent;
     } finally {
+      eventBus.emit('LoadingProgress', { progress: 100 });
+      this.startRender();
+
       await this.prepareScene();
       await this.createScene();
       this.compileScene();
-
-      this.renderer.compile(this.scene, this.camera);
-      if (this.composer) {
-        this.composer.render();
-      } else {
-        this.renderer.render(this.scene, this.camera);
-      }
-
-      eventBus.emit('LoadingProgress', { progress: 100 });
-
-      setTimeout(() => {
-        this.startRender();
-      }, 60);
     }
   }
 
@@ -995,6 +987,7 @@ export class SceneManager {
       // 相机
       this.cameraManager && this.cameraManager.update(deltaTime);
 
+      console.log('this.u_speedUpBackgroundValue', this.u_speedUpBackgroundValue);
       // 更新材质
       this.materialManager &&
         this.materialManager.update(deltaTime, elapsedTime, this.u_speedUpBackgroundValue);
@@ -1235,22 +1228,22 @@ export class SceneManager {
       this.modelManager.lightbarModel.model!.visible = false;
     }
 
-    const theme =
-      sceneConfig.colors.get(colorName || 'custom') ??
-      ({
-        col: '#ffc03f',
-        hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
-        bgUrl: 'custom.webp',
-        rough: 0.03,
-        metal: 0.1,
-        carCover: null,
-        carWindowFilm: null,
-        carWindowRoughness: 0,
-        floorMap: null,
-      } as const);
+    // const theme =
+    //   sceneConfig.colors.get(colorName || 'custom') ??
+    //   ({
+    //     col: '#ffc03f',
+    //     hsl: { h: 40.31 / 360, s: 1, l: 0.6235 },
+    //     bgUrl: 'custom.webp',
+    //     rough: 0.03,
+    //     metal: 0.1,
+    //     carCover: null,
+    //     carWindowFilm: null,
+    //     carWindowRoughness: 0,
+    //     floorMap: null,
+    //   } as const);
 
     const { col, hsl, bgUrl, rough, metal, carCover, carWindowFilm, carWindowRoughness, floorMap } =
-      theme as ColorThemeItem;
+      sceneConfig.colors.get(colorName || 'custom') as ColorThemeItem;
 
     const carModelCache = this.modelManager.getCache('sm_car' as CacheKey) as ModelGroup;
     const carMeshData = carModelCache?.userData?.meshData as ModelMeshData;

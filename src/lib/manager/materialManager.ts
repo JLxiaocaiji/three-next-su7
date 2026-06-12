@@ -897,7 +897,7 @@ export class MaterialManager {
   }
 
   public initSpeedupMaterial(meshData: ModelMeshData): void {
-    const material = new THREE.ShaderMaterial({
+    let material = new THREE.ShaderMaterial({
       uniforms: {
         time: this.global_time_uniforms.u_speedTime, // 时间
         vSpeed: this.u_speedUpBackgroundValue, // 光效强度
@@ -905,11 +905,11 @@ export class MaterialManager {
       },
       vertexShader: customVertexShader,
       fragmentShader: `
-          varying vec3 vPosition;    //
-          varying vec3 vNormal;      //
-          varying vec2 vUv;          //
-          varying vec3 vPositionW;   //
-          varying vec3 vNormalW;     //
+          varying vec3 vPosition;
+          varying vec3 vNormal;
+          varying vec2 vUv;
+          varying vec3 vPositionW;
+          varying vec3 vNormalW;
 
           // 外部传入的控制参数
           uniform float vPoliceColorChange;  // 警灯开关 0~1

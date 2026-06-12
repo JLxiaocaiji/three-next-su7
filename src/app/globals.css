@@ -29,7 +29,6 @@ body {
   -moz-user-select: none;
   user-select: none;
   contain: strict;
-  background: '#000';
 }
 
 .webgl-canvas {
